@@ -10,7 +10,7 @@ import (
 
 var ctx *oto.Context
 var (
-	sampleRate      = flag.Int("samplerate", 4143, "sample rate")
+	sampleRate      = flag.Int("samplerate", 16574 /*4143*/, "sample rate")
 	channelNum      = flag.Int("channelnum", 1, "number of channel")
 	bitDepthInBytes = flag.Int("bitdepthinbytes", 2, "bit depth in bytes")
 )
@@ -18,7 +18,8 @@ var (
 // SamplePlayer plays a single sample
 type SamplePlayer struct {
 	Instrument
-	pos int
+	pos, subpos, rate int
+	ended             bool
 }
 
 // NewSamplePlayer creates a SamplaPlayer object for the instrument ins
@@ -26,26 +27,42 @@ func NewSamplePlayer(ins Instrument) *SamplePlayer {
 	return &SamplePlayer{
 		Instrument: ins,
 		pos:        0,
+		subpos:     0,
+		rate:       1,
+		ended:      false,
 	}
 }
 
 // Read implements the Reader interface for SamplePlayer
 func (sp *SamplePlayer) Read(buf []byte) (int, error) {
-	if sp.pos == sp.Len {
+	if sp.ended {
 		fmt.Println("EOF")
 		return 0, io.EOF
 	}
 
-	if sp.Len-sp.pos <= len(buf) {
-		n := copy(buf, sp.Sample[sp.pos:])
-		sp.pos += n
-		fmt.Println("read -> end", n)
-		return n, nil
+	var bufLen = len(buf)
+	var maxRate = 4
+	for bufIdx := 0; bufIdx < len(buf); bufIdx++ {
+		buf[bufIdx] = sp.Sample[sp.pos]
+
+		sp.subpos++
+		if sp.subpos >= sp.rate {
+			sp.subpos = 0
+			sp.pos++
+		}
+		if sp.pos >= len(sp.Sample) {
+			sp.subpos = 0
+			sp.pos = 0
+			sp.rate *= 2
+		}
+		if sp.rate > maxRate {
+			bufLen = bufIdx + 1
+			fmt.Println("read -> end", bufLen)
+			sp.ended = true
+			break
+		}
 	}
-	n := copy(buf, sp.Sample[sp.pos:sp.pos+len(buf)])
-	sp.pos += n
-	fmt.Println("read", n)
-	return n, nil
+	return bufLen, nil
 }
 
 // PlaySample plays an instrument
