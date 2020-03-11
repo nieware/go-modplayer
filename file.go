@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Instrument represents an instrument used in a MOD file, including the sample data
 type Instrument = struct {
 	Name     string
 	Len      int
@@ -16,6 +17,7 @@ type Instrument = struct {
 	Sample   []byte
 }
 
+// Module stores a complete MOD file
 type Module = struct {
 	Name          string
 	Signature     [4]byte
@@ -94,7 +96,8 @@ func ReadModFile(fn string) (mod Module, err error) {
 2         Length of sample repeat in words. Only loop if greater than 1.
 */
 
-// ReadInstrument
+// ReadInstrument reads an instrument from the MOD file data, including the sample data.
+// The offset of the instrument data and the sampleOffset have to be passed as a parameter.
 func ReadInstrument(data []byte, offset int, sampleOffset int) (ins Instrument, err error) {
 	ins.Name = strings.Trim(string(data[offset:offset+22]), " \t\n\v\f\r\x00")
 

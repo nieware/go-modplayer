@@ -10,6 +10,10 @@ func main() {
 		fmt.Println("file name not specified")
 		return
 	}
-	ReadModFile(os.Args[1])
+	mf, _ := ReadModFile(os.Args[1])
+
+	for i := 0; i < mf.InstrTableLen; i++ {
+		PlaySample(mf.Instruments[i])
+	}
 
 }
