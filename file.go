@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -17,6 +18,53 @@ type Instrument = struct {
 	Sample   []byte
 }
 
+type Effect int
+
+const (
+	Arpeggio           = iota // 0xy: x-first halfnote add, y-second
+	SlideUp                   // 1xx: upspeed
+	SlideDown                 // 2xx: downspeed
+	Portamento                // 3xx: up/down speed
+	Vibrato                   // 4xy: x-speed,   y-depth
+	PortamentoVolSlide        // 5xy: x-upspeed, y-downspeed
+	VibratoVolSlide           // 6xy: x-upspeed, y-downspeed
+	Tremolo                   // 7xy: x-speed,   y-depth
+	NotUsed8                  //
+	SetSampleOffset           // 9xx: offset (23 -> 2300)
+	VolSlide                  // Axy: x-upspeed, y-downspeed
+	PositionJump              // Bxx: songposition
+	SetVol                    // Cxx: volume, 00-40
+	PatternBreak              // Dxx: break position in next patt
+	Extended                  // Exy: see below...
+	SetSpeed                  // Fxx: speed (00-1F) / tempo (20-FF)
+
+	SetFilter          // E0x: 0-filter on, 1-filter off
+	FineSlideUp        // E1x: value
+	FineSlideDown      // E2x: value
+	GlissandoControl   // E3x: 0-off, 1-on (use with tonep.)
+	SetVibratoWaveform // E4x: 0-sine, 1-ramp down, 2-square
+	SetLoop            // E5x: set loop point
+	JumpToLoop         // E6x: jump to loop, play x times
+	SetTremoloWaveform // E7x: 0-sine, 1-ramp down. 2-square
+	NotUsedE8
+	RetrigNote       // E9x: retrig from note + x vblanks
+	FineVolSlideUp   // EAx: add x to volume
+	FineVolSlideDown // EBx: subtract x from volume
+	NoteCut          // ECx: cut from note + x vblanks
+	NoteDelay        // EDx: delay note x vblanks
+	PatternDelay     // EEx: delay pattern x notes
+	InvertLoop       // EFx: speed
+)
+
+type Note = struct {
+	Ins    *Instrument
+	Period int
+	Eff    Effect
+	Pars   byte
+}
+
+type Pattern = [][]Note
+
 // Module stores a complete MOD file
 type Module = struct {
 	Name          string
@@ -25,6 +73,7 @@ type Module = struct {
 	PatternCnt    int
 	Instruments   [31]Instrument
 	PatternTable  []int
+	Patterns      [][][]Note
 }
 
 // ReadModFile reads the full MOD file given by fn and loads the data into the relevant objects
@@ -68,7 +117,21 @@ func ReadModFile(fn string) (mod Module, err error) {
 		sampleOffset += mod.Instruments[i].Len
 	}
 
-	// TODO Patterns
+	// Patterns
+	mod.Patterns = make([][][]Note, mod.PatternCnt)
+	patternsOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + 4
+	for i := range mod.Patterns {
+		mod.Patterns[i] = make([][]Note, 64)
+		fmt.Printf("\n\nPattern %d:\n", i)
+		for j := range mod.Patterns[i] {
+			mod.Patterns[i][j] = make([]Note, 4)
+			for k := range mod.Patterns[i][j] {
+				noteOffset := patternsOffset + ((i*64+j)*4+k)*4
+				mod.Patterns[i][j][k] = ReadNote(data, &mod, noteOffset)
+			}
+			fmt.Printf("%+v\n", mod.Patterns[i][j])
+		}
+	}
 
 	return
 }
@@ -117,5 +180,24 @@ func ReadInstrument(data []byte, offset int, sampleOffset int) (ins Instrument, 
 	ins.Sample = make([]byte, ins.Len)
 	copy(ins.Sample, data[sampleOffset:sampleOffset+ins.Len])
 
+	return
+}
+
+func ReadNote(data []byte, mod *Module, offset int) (n Note) {
+	insNum := data[offset]&0xF0 | (data[offset+2]&0xF0)>>4
+	n.Ins = &mod.Instruments[insNum]
+	bsl := []byte{data[offset] & 0x0F, data[offset+1]}
+	n.Period = (int)(binary.BigEndian.Uint16(bsl))
+	effNum := data[offset+2]
+	if effNum != 0xE {
+		n.Eff = Effect(effNum)
+		fmt.Println(n.Eff)
+		n.Pars = data[offset+3]
+	} else {
+		effSubNum := (data[offset+3] & 0xF0) >> 4
+		n.Eff = Effect(16 + effSubNum)
+		fmt.Println(n.Eff)
+		n.Pars = data[offset+3] & 0x0F
+	}
 	return
 }
