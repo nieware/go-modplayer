@@ -8,7 +8,8 @@ import (
 )
 
 // Instrument represents an instrument used in a MOD file, including the sample data
-type Instrument = struct {
+type Instrument struct {
+	Num      int
 	Name     string
 	Len      int
 	Finetune int
@@ -56,22 +57,23 @@ const (
 	InvertLoop       // EFx: speed
 )
 
-type Note = struct {
-	Ins    *Instrument
-	Period int
-	Eff    Effect
-	Pars   byte
+type Note struct {
+	Ins     *Instrument
+	Period  int
+	EffCode uint16
+	Eff     Effect
+	Pars    byte
 }
 
-type Pattern = [][]Note
+type Pattern [][]Note
 
 // Module stores a complete MOD file
-type Module = struct {
+type Module struct {
 	Name          string
 	Signature     [4]byte
 	InstrTableLen int
 	PatternCnt    int
-	Instruments   [31]Instrument
+	Instruments   [32]Instrument
 	PatternTable  []int
 	Patterns      [][][]Note
 }
@@ -111,9 +113,11 @@ func ReadModFile(fn string) (mod Module, err error) {
 	fmt.Printf("%+v\n", mod)
 
 	// Instruments
+	mod.Instruments[0] = Instrument{Num: 0, Name: "NOP"}
 	sampleOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + 4 + mod.PatternCnt*1024
-	for i := 0; i < mod.InstrTableLen; i++ {
-		mod.Instruments[i], err = ReadInstrument(data, 20+i*30, sampleOffset)
+	for i := 1; i <= mod.InstrTableLen; i++ {
+		mod.Instruments[i], err = ReadInstrument(data, 20+(i-1)*30, sampleOffset)
+		mod.Instruments[i].Num = i
 		sampleOffset += mod.Instruments[i].Len
 	}
 
@@ -129,7 +133,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 				noteOffset := patternsOffset + ((i*64+j)*4+k)*4
 				mod.Patterns[i][j][k] = ReadNote(data, &mod, noteOffset)
 			}
-			fmt.Printf("%+v\n", mod.Patterns[i][j])
+			fmt.Println(mod.Patterns[i][j][0], mod.Patterns[i][j][1], mod.Patterns[i][j][2], mod.Patterns[i][j][3])
 		}
 	}
 
@@ -183,21 +187,35 @@ func ReadInstrument(data []byte, offset int, sampleOffset int) (ins Instrument, 
 	return
 }
 
+func (n Note) String() string {
+	s := ""
+	if n.Period == 0 {
+		if n.Ins.Num == 0 && n.EffCode == 0 {
+			return "--------"
+		}
+		s += "---"
+	} else {
+		s += fmt.Sprintf("%03d", n.Period)
+	}
+	s += fmt.Sprintf("%02x%03x", n.Ins.Num, n.EffCode)
+	return s
+}
+
 func ReadNote(data []byte, mod *Module, offset int) (n Note) {
 	insNum := data[offset]&0xF0 | (data[offset+2]&0xF0)>>4
 	n.Ins = &mod.Instruments[insNum]
 	bsl := []byte{data[offset] & 0x0F, data[offset+1]}
 	n.Period = (int)(binary.BigEndian.Uint16(bsl))
-	effNum := data[offset+2]
+	effNum := data[offset+2] & 0x0F
+	effPar := data[offset+3]
+	n.EffCode = uint16(effNum<<8) | uint16(effPar)
 	if effNum != 0xE {
 		n.Eff = Effect(effNum)
-		fmt.Println(n.Eff)
-		n.Pars = data[offset+3]
+		n.Pars = effPar
 	} else {
 		effSubNum := (data[offset+3] & 0xF0) >> 4
 		n.Eff = Effect(16 + effSubNum)
-		fmt.Println(n.Eff)
-		n.Pars = data[offset+3] & 0x0F
+		n.Pars = effPar & 0x0F
 	}
 	return
 }
