@@ -93,10 +93,12 @@ func ReadModFile(fn string) (mod Module, err error) {
 	copy(mod.Signature[0:4], data[1080:1084])
 	fmt.Printf("%#v %s\n", mod.Signature, string(mod.Signature[0:4]))
 	mod.InstrTableLen = 31
+	signatureLen := 4
 	for _, c := range mod.Signature {
 		// if the signature is not an ASCII string, we have an old module with 15 instruments
 		if c < 32 {
 			mod.InstrTableLen = 15
+			signatureLen = 0 // in old modules without "M.K." (or similar) signature, there is no space for it either. Duh...
 		}
 	}
 
@@ -114,16 +116,18 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 	// Instruments
 	mod.Instruments[0] = Instrument{Num: 0, Name: "NOP"}
-	sampleOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + 4 + mod.PatternCnt*1024
+	sampleOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + signatureLen + mod.PatternCnt*1024
 	for i := 1; i <= mod.InstrTableLen; i++ {
-		mod.Instruments[i], err = ReadInstrument(data, 20+(i-1)*30, sampleOffset)
+		instrOffset := 20 + (i-1)*30
+		mod.Instruments[i], err = ReadInstrument(data[instrOffset:instrOffset+30], data[sampleOffset:])
 		mod.Instruments[i].Num = i
 		sampleOffset += mod.Instruments[i].Len
 	}
 
 	// Patterns
 	mod.Patterns = make([][][]Note, mod.PatternCnt)
-	patternsOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + 4
+	patternsOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + signatureLen
+	fmt.Println("### Pff", mod.InstrTableLen, patternsOffset)
 	for i := range mod.Patterns {
 		mod.Patterns[i] = make([][]Note, 64)
 		fmt.Printf("\n\nPattern %d:\n", i)
@@ -131,7 +135,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 			mod.Patterns[i][j] = make([]Note, 4)
 			for k := range mod.Patterns[i][j] {
 				noteOffset := patternsOffset + ((i*64+j)*4+k)*4
-				mod.Patterns[i][j][k] = ReadNote(data, &mod, noteOffset)
+				mod.Patterns[i][j][k] = ReadNote(data[noteOffset:noteOffset+4], &mod)
 			}
 			fmt.Println(mod.Patterns[i][j][0], mod.Patterns[i][j][1], mod.Patterns[i][j][2], mod.Patterns[i][j][3])
 		}
@@ -165,24 +169,25 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 // ReadInstrument reads an instrument from the MOD file data, including the sample data.
 // The offset of the instrument data and the sampleOffset have to be passed as a parameter.
-func ReadInstrument(data []byte, offset int, sampleOffset int) (ins Instrument, err error) {
-	ins.Name = strings.Trim(string(data[offset:offset+22]), " \t\n\v\f\r\x00")
+func ReadInstrument(instrData []byte, sampleData []byte) (ins Instrument, err error) {
+	ins.Name = strings.Trim(string(instrData[0:22]), " \t\n\v\f\r\x00")
 
-	//fmt.Printf("%x %x", data[offset+22], data[offset+23])
-	ins.Len = int(data[offset+22])<<9 | int(data[offset+23])<<1
+	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
 
 	//TODO ins.Finetune - signed nibble. sounds interesting...
 
-	ins.Volume = int(data[offset+25])
+	ins.Volume = int(instrData[25])
 
-	ins.RepStart = int(data[offset+26])<<9 | int(data[offset+27])<<1
-	if data[offset+29] > 1 {
-		ins.RepLen = int(data[offset+28])<<9 | int(data[offset+29])<<1
+	ins.RepStart = int(instrData[26])<<9 | int(instrData[27])<<1
+	if instrData[29] > 1 {
+		ins.RepLen = int(instrData[28])<<9 | int(instrData[29])<<1
 	}
 	fmt.Printf("%s : Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
-
+	if ins.Len == 0 {
+		return
+	}
 	ins.Sample = make([]byte, ins.Len)
-	copy(ins.Sample, data[sampleOffset:sampleOffset+ins.Len])
+	copy(ins.Sample, sampleData[0:ins.Len])
 
 	return
 }
@@ -201,21 +206,24 @@ func (n Note) String() string {
 	return s
 }
 
-func ReadNote(data []byte, mod *Module, offset int) (n Note) {
-	insNum := data[offset]&0xF0 | (data[offset+2]&0xF0)>>4
+func ReadNote(noteData []byte, mod *Module) (n Note) {
+	insNum := noteData[0]&0xF0 | (noteData[2]&0xF0)>>4
 	n.Ins = &mod.Instruments[insNum]
-	bsl := []byte{data[offset] & 0x0F, data[offset+1]}
+
+	bsl := []byte{noteData[0] & 0x0F, noteData[1]}
 	n.Period = (int)(binary.BigEndian.Uint16(bsl))
-	effNum := data[offset+2] & 0x0F
-	effPar := data[offset+3]
-	n.EffCode = uint16(effNum<<8) | uint16(effPar)
+
+	effNum := noteData[2] & 0x0F
+	effPar := noteData[3]
+	n.EffCode = uint16(effNum)<<8 | uint16(effPar)
 	if effNum != 0xE {
 		n.Eff = Effect(effNum)
 		n.Pars = effPar
 	} else {
-		effSubNum := (data[offset+3] & 0xF0) >> 4
+		effSubNum := (noteData[3] & 0xF0) >> 4
 		n.Eff = Effect(16 + effSubNum)
 		n.Pars = effPar & 0x0F
 	}
+
 	return
 }
