@@ -57,6 +57,7 @@ const (
 	InvertLoop       // EFx: speed
 )
 
+// Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
 type Note struct {
 	Ins     *Instrument
 	Period  int
@@ -65,6 +66,7 @@ type Note struct {
 	Pars    byte
 }
 
+// Pattern is a 2-dimensional slice of Notes (lines x channels)
 type Pattern [][]Note
 
 // Module stores a complete MOD file
@@ -206,6 +208,7 @@ func (n Note) String() string {
 	return s
 }
 
+// ReadNote constructs a Note from the given noteData slice
 func ReadNote(noteData []byte, mod *Module) (n Note) {
 	insNum := noteData[0]&0xF0 | (noteData[2]&0xF0)>>4
 	n.Ins = &mod.Instruments[insNum]
