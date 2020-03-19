@@ -12,8 +12,8 @@ func main() {
 	}
 	mf, _ := ReadModFile(os.Args[1])
 
-	//PlaySample(mf.Instruments[3])
-	for i := 0; i < mf.InstrTableLen; i++ {
+	PlaySample(mf.Instruments[1])
+	/*for i := 0; i < mf.InstrTableLen; i++ {
 		if mf.Instruments[i].Len > 0 {
 			PlaySample(mf.Instruments[i])
 		}
