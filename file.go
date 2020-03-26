@@ -114,7 +114,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 			mod.PatternCnt = mod.PatternTable[i] + 1
 		}
 	}
-	fmt.Printf("%+v\n", mod)
+	//fmt.Printf("%+v\n", mod)
 
 	// Instruments
 	mod.Instruments[0] = Instrument{Num: 0, Name: "NOP"}
@@ -129,7 +129,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 	// Patterns
 	mod.Patterns = make([][][]Note, mod.PatternCnt)
 	patternsOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + signatureLen
-	fmt.Println("### Pff", mod.InstrTableLen, patternsOffset)
+	//fmt.Println("### Pff", mod.InstrTableLen, patternsOffset)
 	for i := range mod.Patterns {
 		mod.Patterns[i] = make([][]Note, 64)
 		fmt.Printf("\n\nPattern %d:\n", i)
