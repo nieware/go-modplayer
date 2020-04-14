@@ -23,7 +23,7 @@ var (
 		//16574,
 		//4143,
 		"sample rate")
-	channelNum      = flag.Int("channelnum", 1, "number of channels")
+	channelNum      = flag.Int("channelnum", 2, "number of channels")
 	bitDepthInBytes = flag.Int("bitdepthinbytes", 1, "bit depth in bytes")
 )
 
@@ -62,6 +62,18 @@ func NewPlayer(mod Module) *Player {
 	}
 }
 
+// InterpolateHermite4pt3oX interpolates the output waveform
+func (p *Player) InterpolateHermite4pt3oX(x0, x1, x2, x3 int8, t float32) int {
+	return int(x1)
+
+	// doesn't seem to make a difference (actually sounds slightly worse?!) - maybe not correct...
+	c0 := float32(x1)
+	c1 := float32(x2-x0) * .5
+	c2 := float32(x0) - float32(x1)*2.5 + float32(x2)*2 - float32(x3)*.5
+	c3 := float32(x3-x0)*.5 + float32(x1-x2)*1.5
+	return int((((((c3 * t) + c2) * t) + c1) * t) + c0)
+}
+
 // Read implements the Reader interface for Player
 func (p *Player) Read(buf []byte) (int, error) {
 	if p.ended {
@@ -70,7 +82,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 	}
 
 	var bufLen = len(buf)
-	for bufIdx := 0; bufIdx < len(buf); bufIdx += *bitDepthInBytes {
+	for bufIdx := 0; bufIdx < len(buf); bufIdx += *bitDepthInBytes * *channelNum {
 		// if we are at the start of a new line, init the notes and effects
 		if p.curBeat == 0 && p.curTiming == 0 {
 			patt := p.Module.PatternTable[p.curPattern]
@@ -82,7 +94,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 					// if we have an instrument, start playing a new note
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
-					p.chans[i].pos = 0
+					p.chans[i].pos = 1 // needed because of interpolation
 					p.chans[i].periodΔ = 0
 					p.chans[i].period = note.Period
 					// Amiga PAL clock freq. 3546894.6
@@ -134,28 +146,38 @@ func (p *Player) Read(buf []byte) (int, error) {
 		}
 
 		// mix the current value from all channels
-		var mix int
+		var mix [2]int
+		var chanTab = [4]int{0, 1, 1, 0}
 		for i, ch := range p.chans {
 			if !ch.active {
 				continue
 			}
-			pos, subpos := math.Modf(float64(ch.pos))
+			pos64, subpos64 := math.Modf(float64(ch.pos))
+			pos := int(pos64)
 			//subpos = 0 // This disables the "interpolation"
-			val := int(float64(ch.ins.Sample[int(pos)])*(1-subpos) + float64(ch.ins.Sample[int(pos)+1])*subpos)
-			mix += val
+			val := p.InterpolateHermite4pt3oX(
+				ch.ins.Sample[pos-1], ch.ins.Sample[pos],
+				ch.ins.Sample[pos+1], ch.ins.Sample[pos+2],
+				float32(subpos64),
+			)
+			//val := int(float64(ch.ins.Sample[int(pos)])*(1-subpos) + float64(ch.ins.Sample[int(pos)+1])*subpos)
+			mix[chanTab[i]] += val
 			p.chans[i].pos += ch.step
-			if p.chans[i].pos >= float32(len(ch.ins.Sample)-1) {
+			if p.chans[i].pos >= float32(len(ch.ins.Sample)-2) {
 				p.chans[i].active = false // played out (TODO: repeat!)
 				//fmt.Println("ch", i, "-> inactive")
 			}
 		}
 		if *bitDepthInBytes == 1 {
 			// 8-bit: right-shift the mixed value to avoid overflow (TODO this depends on the number of channels)
-			buf[bufIdx] = byte(mix >> 2)
+			buf[bufIdx] = byte(mix[0]>>1 + 127)
+			buf[bufIdx+1] = byte(mix[1]>>1 + 127)
 		} else {
 			// 16-bit: split the value in 2 bytes
-			buf[bufIdx] = byte(mix & 0x00FF)
-			buf[bufIdx+1] = byte((mix & 0xFF00) >> 8)
+			buf[bufIdx] = byte(mix[0] & 0x00FF)
+			buf[bufIdx+1] = byte((mix[0] & 0xFF00) >> 8)
+			buf[bufIdx+2] = byte(mix[1] & 0x00FF)
+			buf[bufIdx+3] = byte((mix[1] & 0xFF00) >> 8)
 		}
 	}
 	return bufLen, nil

@@ -16,7 +16,7 @@ type Instrument struct {
 	Volume   int
 	RepStart int
 	RepLen   int
-	Sample   []byte
+	Sample   []int8
 }
 
 type Effect int
@@ -188,8 +188,11 @@ func ReadInstrument(instrData []byte, sampleData []byte) (ins Instrument, err er
 	if ins.Len == 0 {
 		return
 	}
-	ins.Sample = make([]byte, ins.Len)
-	copy(ins.Sample, sampleData[0:ins.Len])
+	ins.Sample = make([]int8, ins.Len)
+	//copy(ins.Sample, sampleData[0:ins.Len]) -- doesn't work with byte -> int8; FIXME: faster version?!
+	for i := range ins.Sample {
+		ins.Sample[i] = int8(sampleData[i])
+	}
 
 	return
 }
