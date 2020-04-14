@@ -45,6 +45,8 @@ type Player struct {
 type Channel struct {
 	active    bool        // is the channel currently playing something? Set to false if the sample has "played out"
 	ins       *Instrument // the instrument currently played
+	period    int         // current period
+	periodΔ   int         // period delta (value to add/subtract for pitch bending)
 	pos, step float32     // the position inside the sample and the step with which to advance the position
 }
 
@@ -81,23 +83,40 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
 					p.chans[i].pos = 0
+					p.chans[i].periodΔ = 0
+					p.chans[i].period = note.Period
 					// Amiga PAL clock freq. 3546894.6
-					p.chans[i].step = 3546894.6 / float32(*sampleRate*note.Period)
+					p.chans[i].step = 3546894.6 / float32(*sampleRate*p.chans[i].period)
 					//fmt.Println("ch", i, "-> active, step", p.chans[i].step)
 				}
+				p.chans[i].periodΔ = 0
 				if note.EffCode != 0 {
+					fmt.Printf("Eff %x\n", note.Eff)
 					// If we have an effect, set it on new or currently playing note
-					// TODO
+					switch note.Eff {
+					case SlideUp:
+						p.chans[i].periodΔ = -int(note.Pars)
+					case SlideDown:
+						p.chans[i].periodΔ = int(note.Pars)
+					}
+					fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
 				}
 			}
 		}
-		if p.curTiming == 0 {
-			// TODO: some effects have to be reapplied with each beat
-		}
+
 		p.curTiming++
 		if p.curTiming >= p.curSPB {
 			p.curTiming = 0
 			p.curBeat++
+
+			// some effects have to be reapplied with each beat
+			for i := range p.chans {
+				if p.chans[i].periodΔ != 0 {
+					p.chans[i].period += p.chans[i].periodΔ
+					fmt.Println("per", p.chans[i].period)
+					p.chans[i].step = 3546894.6 / float32(*sampleRate*p.chans[i].period)
+				}
+			}
 		}
 		if p.curBeat >= p.curTempo {
 			p.curTiming, p.curBeat = 0, 0
