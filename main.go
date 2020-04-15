@@ -12,6 +12,7 @@ func main() {
 	}
 	mod, _ := ReadModFile(os.Args[1])
 
+	mod.Info()
 	Play(mod)
 	/*for i := 0; i < mf.InstrTableLen; i++ {
 		if mf.Instruments[i].Len > 0 {

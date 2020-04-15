@@ -22,22 +22,22 @@ type Instrument struct {
 type Effect int
 
 const (
-	Arpeggio           = iota // 0xy: x-first halfnote add, y-second
-	SlideUp                   // 1xx: upspeed
-	SlideDown                 // 2xx: downspeed
-	Portamento                // 3xx: up/down speed
-	Vibrato                   // 4xy: x-speed,   y-depth
-	PortamentoVolSlide        // 5xy: x-upspeed, y-downspeed
-	VibratoVolSlide           // 6xy: x-upspeed, y-downspeed
-	Tremolo                   // 7xy: x-speed,   y-depth
-	NotUsed8                  //
-	SetSampleOffset           // 9xx: offset (23 -> 2300)
-	VolSlide                  // Axy: x-upspeed, y-downspeed
-	PositionJump              // Bxx: songposition
-	SetVol                    // Cxx: volume, 00-40
-	PatternBreak              // Dxx: break position in next patt
-	Extended                  // Exy: see below...
-	SetSpeed                  // Fxx: speed (00-1F) / tempo (20-FF)
+	Arpeggio           Effect = iota // 0xy: x-first halfnote add, y-second
+	SlideUp                          // 1xx: upspeed
+	SlideDown                        // 2xx: downspeed
+	Portamento                       // 3xx: up/down speed
+	Vibrato                          // 4xy: x-speed,   y-depth
+	PortamentoVolSlide               // 5xy: x-upspeed, y-downspeed
+	VibratoVolSlide                  // 6xy: x-upspeed, y-downspeed
+	Tremolo                          // 7xy: x-speed,   y-depth
+	NotUsed8                         //
+	SetSampleOffset                  // 9xx: offset (23 -> 2300)
+	VolSlide                         // Axy: x-upspeed, y-downspeed
+	PositionJump                     // Bxx: songposition
+	SetVol                           // Cxx: volume, 00-40
+	PatternBreak                     // Dxx: break position in next patt
+	Extended                         // Exy: see below...
+	SetSpeed                         // Fxx: speed (00-1F) / tempo (20-FF)
 
 	SetFilter          // E0x: 0-filter on, 1-filter off
 	FineSlideUp        // E1x: value
@@ -56,6 +56,8 @@ const (
 	PatternDelay     // EEx: delay pattern x notes
 	InvertLoop       // EFx: speed
 )
+
+//go:generate stringer -type=Effect
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
 type Note struct {
@@ -80,6 +82,36 @@ type Module struct {
 	Patterns      [][][]Note
 }
 
+func (m Module) Info() {
+	fmt.Println("Name:", m.Name)
+	fmt.Printf("Signature: %#v %s\n", m.Signature, string(m.Signature[0:4]))
+	fmt.Println("Instruments:")
+	for _, ins := range m.Instruments {
+		fmt.Printf("    %s : Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
+	}
+
+	EffStats := make([]int, 32)
+	for _, pattern := range m.Patterns {
+		for _, line := range pattern {
+			for _, note := range line {
+				if note.Eff == Arpeggio && note.Pars == 0 {
+					// Arpeggio effect (0) only counts if it has params
+					continue
+				}
+				EffStats[note.Eff]++
+			}
+		}
+	}
+	fmt.Print("Effect counts: ")
+	for eff, cnt := range EffStats {
+		if cnt == 0 {
+			continue
+		}
+		fmt.Printf("%v: %d; ", Effect(eff), cnt)
+	}
+	fmt.Println()
+}
+
 // ReadModFile reads the full MOD file given by fn and loads the data into the relevant objects
 func ReadModFile(fn string) (mod Module, err error) {
 	data, err := ioutil.ReadFile(fn)
@@ -93,7 +125,6 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 	// Signature (also tells us the number of instruments)
 	copy(mod.Signature[0:4], data[1080:1084])
-	fmt.Printf("%#v %s\n", mod.Signature, string(mod.Signature[0:4]))
 	mod.InstrTableLen = 31
 	signatureLen := 4
 	for _, c := range mod.Signature {
@@ -132,14 +163,14 @@ func ReadModFile(fn string) (mod Module, err error) {
 	//fmt.Println("### Pff", mod.InstrTableLen, patternsOffset)
 	for i := range mod.Patterns {
 		mod.Patterns[i] = make([][]Note, 64)
-		fmt.Printf("\n\nPattern %d:\n", i)
+		//fmt.Printf("\n\nPattern %d:\n", i)
 		for j := range mod.Patterns[i] {
 			mod.Patterns[i][j] = make([]Note, 4)
 			for k := range mod.Patterns[i][j] {
 				noteOffset := patternsOffset + ((i*64+j)*4+k)*4
 				mod.Patterns[i][j][k] = ReadNote(data[noteOffset:noteOffset+4], &mod)
 			}
-			fmt.Println(mod.Patterns[i][j][0], mod.Patterns[i][j][1], mod.Patterns[i][j][2], mod.Patterns[i][j][3])
+			//fmt.Println(mod.Patterns[i][j][0], mod.Patterns[i][j][1], mod.Patterns[i][j][2], mod.Patterns[i][j][3])
 		}
 	}
 
@@ -184,7 +215,6 @@ func ReadInstrument(instrData []byte, sampleData []byte) (ins Instrument, err er
 	if instrData[29] > 1 {
 		ins.RepLen = int(instrData[28])<<9 | int(instrData[29])<<1
 	}
-	fmt.Printf("%s : Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
 	if ins.Len == 0 {
 		return
 	}

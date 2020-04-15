@@ -103,7 +103,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 				}
 				p.chans[i].periodΔ = 0
 				if note.EffCode != 0 {
-					fmt.Printf("Eff %x\n", note.Eff)
+					fmt.Printf("Eff %v\n", note.Eff)
 					// If we have an effect, set it on new or currently playing note
 					switch note.Eff {
 					case SlideUp:
