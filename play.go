@@ -24,7 +24,7 @@ var (
 		//4143,
 		"sample rate")
 	channelNum      = flag.Int("channelnum", 2, "number of channels")
-	bitDepthInBytes = flag.Int("bitdepthinbytes", 1, "bit depth in bytes")
+	bitDepthInBytes = flag.Int("bitdepthinbytes", 2, "bit depth in bytes")
 )
 
 // Player plays a mod file
@@ -45,9 +45,11 @@ type Player struct {
 type Channel struct {
 	active    bool        // is the channel currently playing something? Set to false if the sample has "played out"
 	ins       *Instrument // the instrument currently played
+	pos, step float32     // the position inside the sample and the step with which to advance the position
 	period    int         // current period
 	periodΔ   int         // period delta (value to add/subtract for pitch bending)
-	pos, step float32     // the position inside the sample and the step with which to advance the position
+	volume    int         // current volume
+	volumeΔ   int         // volume delta (value to add/subtract for volume slides)
 }
 
 // NewPlayer creates a Player object for the module mod
@@ -95,8 +97,10 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
 					p.chans[i].pos = 1 // needed because of interpolation
-					p.chans[i].periodΔ = 0
 					p.chans[i].period = note.Period
+					p.chans[i].periodΔ = 0
+					p.chans[i].volume = note.Ins.Volume
+					p.chans[i].volumeΔ = 0
 					// Amiga PAL clock freq. 3546894.6
 					p.chans[i].step = 3546894.6 / float32(*sampleRate*p.chans[i].period)
 					//fmt.Println("ch", i, "-> active, step", p.chans[i].step)
@@ -110,6 +114,8 @@ func (p *Player) Read(buf []byte) (int, error) {
 						p.chans[i].periodΔ = -int(note.Pars)
 					case SlideDown:
 						p.chans[i].periodΔ = int(note.Pars)
+					case SetVol:
+						p.chans[i].volume = int(note.Pars)
 					}
 					fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
 				}
@@ -169,7 +175,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 				float32(subpos64),
 			)
 			//val := int(float64(ch.ins.Sample[int(pos)])*(1-subpos) + float64(ch.ins.Sample[int(pos)+1])*subpos)
-			mix[chanTab[i]] += val
+			mix[chanTab[i]] += val * ch.volume
 			p.chans[i].pos += ch.step
 			if p.chans[i].pos >= float32(len(ch.ins.Sample)-2) {
 				p.chans[i].active = false // played out (TODO: repeat!)
