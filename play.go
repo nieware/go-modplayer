@@ -116,6 +116,12 @@ func (p *Player) Read(buf []byte) (int, error) {
 						p.chans[i].periodΔ = int(note.Pars)
 					case SetVol:
 						p.chans[i].volume = int(note.Pars)
+					case SetSpeed:
+						if note.Pars <= 0x1F {
+							p.curTempo = int(note.Pars)
+						} else {
+							p.curBPM = int(note.Pars)
+						}
 					}
 					fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
 				}
