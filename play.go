@@ -90,7 +90,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 			fmt.Println(notes[0], notes[1], notes[2], notes[3])
 			for i := range p.chans {
 				note := p.Module.Patterns[patt][p.curLine][i]
-				if note.Ins != nil && note.Period > 0 {
+				if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 					// if we have an instrument, start playing a new note
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
@@ -150,6 +150,14 @@ func (p *Player) Read(buf []byte) (int, error) {
 		var chanTab = [4]int{0, 1, 1, 0}
 		for i, ch := range p.chans {
 			if !ch.active {
+				continue
+			}
+			if ch.ins == nil {
+				fmt.Println("ch.ins nil!")
+				continue
+			}
+			if ch.ins.Sample == nil {
+				fmt.Println("ch.ins.Sample nil!")
 				continue
 			}
 			pos64, subpos64 := math.Modf(float64(ch.pos))
