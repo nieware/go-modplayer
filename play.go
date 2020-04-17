@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -17,14 +16,12 @@ import (
 // step = samplerate/y = (samplerate * p) / 3546894.6
 
 var ctx *oto.Context
-var (
-	sampleRate = flag.Int("samplerate",
-		48000,
-		//16574,
-		//4143,
-		"sample rate")
-	channelNum      = flag.Int("channelnum", 2, "number of channels")
-	bitDepthInBytes = flag.Int("bitdepthinbytes", 2, "bit depth in bytes")
+
+const (
+	sampleRate      = 48000
+	channelNum      = 2
+	bitDepthInBytes = 2
+	bufferSize      = 4096
 )
 
 // Player plays a mod file
@@ -54,13 +51,13 @@ type Channel struct {
 
 // NewPlayer creates a Player object for the module mod
 func NewPlayer(mod Module) *Player {
-	fmt.Println("curSPB", int(float64(*sampleRate)/(.4*125)))
+	fmt.Println("curSPB", int(float64(sampleRate)/(.4*125)))
 	return &Player{
 		Module:   mod,
 		chans:    make([]Channel, 4), // we currently only support 4-channel modules
 		curBPM:   125,
 		curTempo: 6,
-		curSPB:   int(float64(*sampleRate) / (.4 * 125)),
+		curSPB:   int(float64(sampleRate) / (.4 * 125)),
 	}
 }
 
@@ -76,6 +73,15 @@ func (p *Player) InterpolateHermite4pt3oX(x0, x1, x2, x3 int8, t float32) int {
 	return int((((((c3 * t) + c2) * t) + c1) * t) + c0)
 }
 
+func findEffect(notes []Note, eff Effect) (byte, bool) {
+	for _, note := range notes {
+		if note.Eff == eff {
+			return note.Pars, true
+		}
+	}
+	return 0, false
+}
+
 // Read implements the Reader interface for Player
 func (p *Player) Read(buf []byte) (int, error) {
 	if p.ended {
@@ -84,12 +90,22 @@ func (p *Player) Read(buf []byte) (int, error) {
 	}
 
 	var bufLen = len(buf)
-	for bufIdx := 0; bufIdx < len(buf); bufIdx += *bitDepthInBytes * *channelNum {
+	for bufIdx := 0; bufIdx < len(buf); bufIdx += bitDepthInBytes * channelNum {
 		// if we are at the start of a new line, init the notes and effects
 		if p.curBeat == 0 && p.curTiming == 0 {
 			patt := p.Module.PatternTable[p.curPattern]
 			notes := p.Module.Patterns[patt][p.curLine]
 			fmt.Println(notes[0], notes[1], notes[2], notes[3])
+
+			// process "pattern break" before playing the notes
+			pars, isPatternBreak := findEffect(notes, PatternBreak)
+			if isPatternBreak {
+				p.curPattern++
+				p.curLine = int(pars)
+				patt = p.Module.PatternTable[p.curPattern]
+				notes = p.Module.Patterns[patt][p.curLine]
+			}
+
 			for i := range p.chans {
 				note := p.Module.Patterns[patt][p.curLine][i]
 				if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
@@ -102,7 +118,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].volume = note.Ins.Volume
 					p.chans[i].volumeΔ = 0
 					// Amiga PAL clock freq. 3546894.6
-					p.chans[i].step = 3546894.6 / float32(*sampleRate*p.chans[i].period)
+					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
 					//fmt.Println("ch", i, "-> active, step", p.chans[i].step)
 				}
 				p.chans[i].periodΔ = 0
@@ -116,6 +132,10 @@ func (p *Player) Read(buf []byte) (int, error) {
 						p.chans[i].periodΔ = int(note.Pars)
 					case SetVol:
 						p.chans[i].volume = int(note.Pars)
+					/*case PatternBreak:
+					p.curPattern++
+					p.curTiming, p.curBeat = 0, 0
+					p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 					case SetSpeed:
 						if note.Pars <= 0x1F {
 							p.curTempo = int(note.Pars)
@@ -138,7 +158,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 				if p.chans[i].periodΔ != 0 {
 					p.chans[i].period += p.chans[i].periodΔ
 					fmt.Println("per", p.chans[i].period)
-					p.chans[i].step = 3546894.6 / float32(*sampleRate*p.chans[i].period)
+					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
 				}
 			}
 		}
@@ -184,11 +204,15 @@ func (p *Player) Read(buf []byte) (int, error) {
 			mix[chanTab[i]] += val * ch.volume
 			p.chans[i].pos += ch.step
 			if p.chans[i].pos >= float32(len(ch.ins.Sample)-2) {
-				p.chans[i].active = false // played out (TODO: repeat!)
+				if ch.ins.RepStart != 0 {
+					p.chans[i].pos = float32(ch.ins.RepStart) // repeat TODO: handle RepLen - but how?!
+				} else {
+					p.chans[i].active = false // played out
+				}
 				//fmt.Println("ch", i, "-> inactive")
 			}
 		}
-		if *bitDepthInBytes == 1 {
+		if bitDepthInBytes == 1 {
 			// 8-bit: right-shift the mixed value to avoid overflow (TODO this depends on the number of channels)
 			buf[bufIdx] = byte(mix[0]>>1 + 127)
 			buf[bufIdx+1] = byte(mix[1]>>1 + 127)
@@ -219,7 +243,7 @@ func Play(mod Module) error {
 
 func init() {
 	var err error
-	ctx, err = oto.NewContext(*sampleRate, *channelNum, *bitDepthInBytes, 4096)
+	ctx, err = oto.NewContext(sampleRate, channelNum, bitDepthInBytes, bufferSize)
 	if err != nil {
 		panic("Unable to initialize audio, error " + err.Error())
 	}

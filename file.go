@@ -19,42 +19,75 @@ type Instrument struct {
 	Sample   []int8
 }
 
+// Effect represents a module effect
 type Effect int
 
 const (
-	Arpeggio           Effect = iota // 0xy: x-first halfnote add, y-second
-	SlideUp                          // 1xx: upspeed
-	SlideDown                        // 2xx: downspeed
-	Portamento                       // 3xx: up/down speed
-	Vibrato                          // 4xy: x-speed,   y-depth
-	PortamentoVolSlide               // 5xy: x-upspeed, y-downspeed
-	VibratoVolSlide                  // 6xy: x-upspeed, y-downspeed
-	Tremolo                          // 7xy: x-speed,   y-depth
-	NotUsed8                         //
-	SetSampleOffset                  // 9xx: offset (23 -> 2300)
-	VolSlide                         // Axy: x-upspeed, y-downspeed
-	PositionJump                     // Bxx: songposition
-	SetVol                           // Cxx: volume, 00-40
-	PatternBreak                     // Dxx: break position in next patt
-	Extended                         // Exy: see below...
-	SetSpeed                         // Fxx: speed (00-1F) / tempo (20-FF)
+	// Arpeggio 0xy: x-first halfnote add, y-second - period cycles between p, p+x, p+y each tick
+	Arpeggio Effect = iota
+	// SlideUp 1xx: upspeed - period is decreased by xx each tick
+	SlideUp
+	// SlideDown 2xx: downspeed - period is increased by xx each tick
+	SlideDown
+	// Portamento 3xx: up/down speed
+	Portamento
+	// Vibrato 4xy: x-speed, y-depth
+	Vibrato
+	// PortamentoVolSlide 5xy: x-upspeed, y-downspeed
+	PortamentoVolSlide
+	// VibratoVolSlide 6xy: x-upspeed, y-downspeed
+	VibratoVolSlide
+	// Tremolo 7xy: x-speed,   y-depth
+	Tremolo
+	// NotUsed8 value 8, unused
+	NotUsed8
+	// SetSampleOffset 9xx: offset (23 -> 2300)
+	SetSampleOffset
+	// VolSlide Axy: x-upspeed, y-downspeed
+	VolSlide
+	// PositionJump Bxx: songposition
+	PositionJump
+	// SetVol  Cxx: volume, 00-40
+	SetVol
+	// PatternBreak Dxx: break position in next patt
+	PatternBreak
+	// Extended Exy: see below...
+	Extended
+	// SetSpeed  Fxx: speed (00-1F) / tempo (20-FF)
+	SetSpeed
 
-	SetFilter          // E0x: 0-filter on, 1-filter off
-	FineSlideUp        // E1x: value
-	FineSlideDown      // E2x: value
-	GlissandoControl   // E3x: 0-off, 1-on (use with tonep.)
-	SetVibratoWaveform // E4x: 0-sine, 1-ramp down, 2-square
-	SetLoop            // E5x: set loop point
-	JumpToLoop         // E6x: jump to loop, play x times
-	SetTremoloWaveform // E7x: 0-sine, 1-ramp down. 2-square
+	// SetFilter E0x: 0-filter on, 1-filter off
+	SetFilter
+	// FineSlideUp E1x: value
+	FineSlideUp
+	// FineSlideDown E2x: value
+	FineSlideDown
+	// GlissandoControl E3x: 0-off, 1-on (use with tonep.)
+	GlissandoControl
+	// SetVibratoWaveform E4x: 0-sine, 1-ramp down, 2-square
+	SetVibratoWaveform
+	// SetLoop E5x: set loop point
+	SetLoop
+	// JumpToLoop E6x: jump to loop, play x times
+	JumpToLoop
+	// SetTremoloWaveform E7x: 0-sine, 1-ramp down. 2-square
+	SetTremoloWaveform
+	// NotUsedE8 unused extended command
 	NotUsedE8
-	RetrigNote       // E9x: retrig from note + x vblanks
-	FineVolSlideUp   // EAx: add x to volume
-	FineVolSlideDown // EBx: subtract x from volume
-	NoteCut          // ECx: cut from note + x vblanks
-	NoteDelay        // EDx: delay note x vblanks
-	PatternDelay     // EEx: delay pattern x notes
-	InvertLoop       // EFx: speed
+	// RetrigNote E9x: retrig from note + x vblanks
+	RetrigNote
+	// FineVolSlideUp EAx: add x to volume
+	FineVolSlideUp
+	// FineVolSlideDown EBx: subtract x from volume
+	FineVolSlideDown
+	// NoteCut ECx: cut from note + x vblanks
+	NoteCut
+	// NoteDelay EDx: delay note x vblanks
+	NoteDelay
+	// PatternDelay EEx: delay pattern x notes
+	PatternDelay
+	// InvertLoop EFx: speed
+	InvertLoop
 )
 
 //go:generate stringer -type=Effect
@@ -73,6 +106,7 @@ type Pattern [][]Note
 
 // Module stores a complete MOD file
 type Module struct {
+	FileName      string
 	Name          string
 	Signature     [4]byte
 	InstrTableLen int
@@ -82,11 +116,16 @@ type Module struct {
 	Patterns      [][][]Note
 }
 
+// Info prints information on the module file
 func (m Module) Info() {
+	fmt.Println("FileName:", m.FileName)
 	fmt.Println("Name:", m.Name)
 	fmt.Printf("Signature: %#v %s\n", m.Signature, string(m.Signature[0:4]))
 	fmt.Println("Instruments:")
 	for _, ins := range m.Instruments {
+		if ins.Len == 0 {
+			continue
+		}
 		fmt.Printf("    %s : Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
 	}
 
@@ -110,13 +149,14 @@ func (m Module) Info() {
 		fmt.Printf("%v: %d; ", Effect(eff), cnt)
 	}
 	fmt.Println()
+	fmt.Println()
 }
 
 // ReadModFile reads the full MOD file given by fn and loads the data into the relevant objects
 func ReadModFile(fn string) (mod Module, err error) {
+	mod.FileName = fn
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
