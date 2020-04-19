@@ -40,13 +40,14 @@ type Player struct {
 
 // Channel is an individual channel of a Player
 type Channel struct {
-	active    bool        // is the channel currently playing something? Set to false if the sample has "played out"
-	ins       *Instrument // the instrument currently played
-	pos, step float32     // the position inside the sample and the step with which to advance the position
-	period    int         // current period
-	periodΔ   int         // period delta (value to add/subtract for pitch bending)
-	volume    int         // current volume
-	volumeΔ   int         // volume delta (value to add/subtract for volume slides)
+	active          bool        // is the channel currently playing something? Set to false if the sample has "played out"
+	ins             *Instrument // the instrument currently played
+	pos, step       float32     // the position inside the sample and the step with which to advance the position
+	firstTickOfNote bool        // is this the first tick where we play this note?
+	period          int         // current period
+	periodΔ         int         // period delta (value to add/subtract for pitch bending)
+	volume          int         // current volume
+	volumeΔ         int         // volume delta (value to add/subtract for volume slides)
 }
 
 // NewPlayer creates a Player object for the module mod
@@ -73,10 +74,10 @@ func (p *Player) InterpolateHermite4pt3oX(x0, x1, x2, x3 int8, t float32) int {
 	return int((((((c3 * t) + c2) * t) + c1) * t) + c0)
 }
 
-func findEffect(notes []Note, eff Effect) (byte, bool) {
+func findEffect(notes []Note, eff EffectType) (byte, bool) {
 	for _, note := range notes {
-		if note.Eff == eff {
-			return note.Pars, true
+		if note.EffType == eff {
+			return note.Par(), true
 		}
 	}
 	return 0, false
@@ -117,30 +118,39 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].periodΔ = 0
 					p.chans[i].volume = note.Ins.Volume
 					p.chans[i].volumeΔ = 0
+					p.chans[i].firstTickOfNote = true
 					// Amiga PAL clock freq. 3546894.6
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
 					//fmt.Println("ch", i, "-> active, step", p.chans[i].step)
 				}
 				p.chans[i].periodΔ = 0
+				p.chans[i].volumeΔ = 0
 				if note.EffCode != 0 {
-					fmt.Printf("Eff %v\n", note.Eff)
+					fmt.Printf("Eff %v\n", note.EffType)
 					// If we have an effect, set it on new or currently playing note
-					switch note.Eff {
+					switch note.EffType {
 					case SlideUp:
-						p.chans[i].periodΔ = -int(note.Pars)
+						p.chans[i].periodΔ = -int(note.Par())
 					case SlideDown:
-						p.chans[i].periodΔ = int(note.Pars)
+						p.chans[i].periodΔ = int(note.Par())
+					case VolSlide:
+						fmt.Printf("Eff X%d Y%d\n", note.ParX(), note.ParY())
+						if note.ParX() > 0 {
+							p.chans[i].volumeΔ = int(note.ParX())
+						} else {
+							p.chans[i].volumeΔ = -int(note.ParY())
+						}
 					case SetVol:
-						p.chans[i].volume = int(note.Pars)
+						p.chans[i].volume = int(note.Par())
 					/*case PatternBreak:
 					p.curPattern++
 					p.curTiming, p.curBeat = 0, 0
 					p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 					case SetSpeed:
-						if note.Pars <= 0x1F {
-							p.curTempo = int(note.Pars)
+						if note.Par() <= 0x1F {
+							p.curTempo = int(note.Par())
 						} else {
-							p.curBPM = int(note.Pars)
+							p.curBPM = int(note.Par())
 						}
 					}
 					fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
@@ -155,11 +165,22 @@ func (p *Player) Read(buf []byte) (int, error) {
 
 			// some effects have to be reapplied with each beat
 			for i := range p.chans {
-				if p.chans[i].periodΔ != 0 {
+				if p.chans[i].periodΔ != 0 && !p.chans[i].firstTickOfNote {
 					p.chans[i].period += p.chans[i].periodΔ
 					fmt.Println("per", p.chans[i].period)
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
 				}
+				if p.chans[i].volumeΔ != 0 && !p.chans[i].firstTickOfNote {
+					p.chans[i].volume += p.chans[i].volumeΔ // FIXME: not sure if this is correct, seems to be too fast!
+					if p.chans[i].volume > 64 {
+						p.chans[i].volume = 64
+					}
+					if p.chans[i].volume < 0 {
+						p.chans[i].volume = 0
+					}
+					fmt.Println("vol", p.chans[i].volume)
+				}
+				p.chans[i].firstTickOfNote = false
 			}
 		}
 		if p.curBeat >= p.curTempo {

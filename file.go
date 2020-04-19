@@ -16,15 +16,16 @@ type Instrument struct {
 	Volume   int
 	RepStart int
 	RepLen   int
+	Offset   int
 	Sample   []int8
 }
 
-// Effect represents a module effect
-type Effect int
+// EffectType represents a module effect
+type EffectType int
 
 const (
 	// Arpeggio 0xy: x-first halfnote add, y-second - period cycles between p, p+x, p+y each tick
-	Arpeggio Effect = iota
+	Arpeggio EffectType = iota
 	// SlideUp 1xx: upspeed - period is decreased by xx each tick
 	SlideUp
 	// SlideDown 2xx: downspeed - period is increased by xx each tick
@@ -90,15 +91,34 @@ const (
 	InvertLoop
 )
 
-//go:generate stringer -type=Effect
+//go:generate stringer -type=EffectType
+
+// Effect is an effect (mostly applied to a note)
+type Effect struct {
+	EffType EffectType
+	EffCode uint16
+}
+
+// Par returns the parameter byte in its entirety
+func (e Effect) Par() byte {
+	return byte(e.EffCode & 0xFF)
+}
+
+// ParX returns the first nibble of the parameter byte
+func (e Effect) ParX() byte {
+	return byte(e.EffCode & 0xF0 >> 4)
+}
+
+// ParY returns the parameter byte in its entirety
+func (e Effect) ParY() byte {
+	return byte(e.EffCode & 0x0F)
+}
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
 type Note struct {
-	Ins     *Instrument
-	Period  int
-	EffCode uint16
-	Eff     Effect
-	Pars    byte
+	Ins    *Instrument
+	Period int
+	Effect
 }
 
 // Pattern is a 2-dimensional slice of Notes (lines x channels)
@@ -121,23 +141,24 @@ func (m Module) Info() {
 	fmt.Println("FileName:", m.FileName)
 	fmt.Println("Name:", m.Name)
 	fmt.Printf("Signature: %#v %s\n", m.Signature, string(m.Signature[0:4]))
+	fmt.Println("Patterns (used):", len(m.Patterns))
 	fmt.Println("Instruments:")
 	for _, ins := range m.Instruments {
 		if ins.Len == 0 {
 			continue
 		}
-		fmt.Printf("    %s : Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
+		fmt.Printf("    %s : Offs %x, Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Offset, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
 	}
 
 	EffStats := make([]int, 32)
 	for _, pattern := range m.Patterns {
 		for _, line := range pattern {
 			for _, note := range line {
-				if note.Eff == Arpeggio && note.Pars == 0 {
+				if note.EffType == Arpeggio && note.Par() == 0 {
 					// Arpeggio effect (0) only counts if it has params
 					continue
 				}
-				EffStats[note.Eff]++
+				EffStats[note.EffType]++
 			}
 		}
 	}
@@ -146,7 +167,7 @@ func (m Module) Info() {
 		if cnt == 0 {
 			continue
 		}
-		fmt.Printf("%v: %d; ", Effect(eff), cnt)
+		fmt.Printf("%v: %d; ", EffectType(eff), cnt)
 	}
 	fmt.Println()
 	fmt.Println()
@@ -188,13 +209,25 @@ func ReadModFile(fn string) (mod Module, err error) {
 	//fmt.Printf("%+v\n", mod)
 
 	// Instruments
+	// We read the samples from the end of the file - this assumes that there is no additional data at the end of the file.
+	// Getting the sample offset from the previous data is unreliable because there may be patterns which are not in the pattern table.
 	mod.Instruments[0] = Instrument{Num: 0, Name: "NOP"}
-	sampleOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + signatureLen + mod.PatternCnt*1024
-	for i := 1; i <= mod.InstrTableLen; i++ {
+	sampleOffset := len(data)
+	for i := mod.InstrTableLen; i > 0; i-- {
 		instrOffset := 20 + (i-1)*30
-		mod.Instruments[i], err = ReadInstrument(data[instrOffset:instrOffset+30], data[sampleOffset:])
+		mod.Instruments[i], err = ReadInstrument(data[instrOffset : instrOffset+30])
 		mod.Instruments[i].Num = i
-		sampleOffset += mod.Instruments[i].Len
+		if mod.Instruments[i].Len == 0 {
+			continue
+		}
+		sampleOffset -= mod.Instruments[i].Len
+		mod.Instruments[i].Offset = sampleOffset
+		mod.Instruments[i].Sample = make([]int8, mod.Instruments[i].Len)
+		//copy(ins.Sample, sampleData[0:ins.Len]) -- doesn't work with byte -> int8; FIXME: faster version?!
+		for j := range mod.Instruments[i].Sample {
+			mod.Instruments[i].Sample[j] = int8(data[sampleOffset+j])
+		}
+
 	}
 
 	// Patterns
@@ -242,7 +275,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 // ReadInstrument reads an instrument from the MOD file data, including the sample data.
 // The offset of the instrument data and the sampleOffset have to be passed as a parameter.
-func ReadInstrument(instrData []byte, sampleData []byte) (ins Instrument, err error) {
+func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 	ins.Name = strings.Trim(string(instrData[0:22]), " \t\n\v\f\r\x00")
 
 	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
@@ -257,11 +290,6 @@ func ReadInstrument(instrData []byte, sampleData []byte) (ins Instrument, err er
 	}
 	if ins.Len == 0 {
 		return
-	}
-	ins.Sample = make([]int8, ins.Len)
-	//copy(ins.Sample, sampleData[0:ins.Len]) -- doesn't work with byte -> int8; FIXME: faster version?!
-	for i := range ins.Sample {
-		ins.Sample[i] = int8(sampleData[i])
 	}
 
 	return
@@ -293,12 +321,10 @@ func ReadNote(noteData []byte, mod *Module) (n Note) {
 	effPar := noteData[3]
 	n.EffCode = uint16(effNum)<<8 | uint16(effPar)
 	if effNum != 0xE {
-		n.Eff = Effect(effNum)
-		n.Pars = effPar
+		n.EffType = EffectType(effNum)
 	} else {
 		effSubNum := (noteData[3] & 0xF0) >> 4
-		n.Eff = Effect(16 + effSubNum)
-		n.Pars = effPar & 0x0F
+		n.EffType = EffectType(16 + effSubNum)
 	}
 
 	return
