@@ -10,3 +10,9 @@
 # Audio processing
 
 - [interpolation](https://stackoverflow.com/questions/1125666/how-do-you-do-bicubic-or-other-non-linear-interpolation-of-re-sampled-audio-da)
+
+# Misc notes
+
+## Show info for all files in current directory
+
+find . -maxdepth 1 -type f -iname "*.mod" -exec go-modplayer -info {} \; > ./info.txt

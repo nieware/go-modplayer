@@ -147,7 +147,7 @@ func (m Module) Info() {
 		if ins.Len == 0 {
 			continue
 		}
-		fmt.Printf("    %s : Offs %x, Len %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Offset, ins.Len, ins.Volume, ins.RepStart, ins.RepLen)
+		fmt.Printf("    %s : Offs %x, Len %d, Finetune %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Offset, ins.Len, ins.Finetune, ins.Volume, ins.RepStart, ins.RepLen)
 	}
 
 	EffStats := make([]int, 32)
@@ -206,7 +206,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 			mod.PatternCnt = mod.PatternTable[i] + 1
 		}
 	}
-	//fmt.Printf("%+v\n", mod)
+	fmt.Printf("%+v\n", mod)
 
 	// Instruments
 	// We read the samples from the end of the file - this assumes that there is no additional data at the end of the file.
@@ -280,7 +280,8 @@ func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 
 	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
 
-	//TODO ins.Finetune - signed nibble. sounds interesting...
+	// FIXME this is actually a signed nibble, but we are currently treating it as unsigned
+	ins.Finetune = int(instrData[24] & 0x0F)
 
 	ins.Volume = int(instrData[25])
 
