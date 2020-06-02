@@ -1,21 +1,21 @@
 # Effects implementation status
 
-0 ✖ Normal play or Arpeggio             0xy : x-first halfnote add, y-second           pitch (w. note assignment)
-1 ✔️ Slide Up                            1xx : upspeed                                  pitch
-2 ✔️ Slide Down                          2xx : downspeed                                pitch
+0 ✖ Normal play or Arpeggio             0xy : x-first halfnote add, y-second           pitch (w. note assignment, applied 2/3 times per line)
+1 ✔️ Slide Up                            1xx : upspeed                                  pitch (applied once per beat)
+2 ✔️ Slide Down                          2xx : downspeed                                pitch (applied once per beat)
 3 ✖ Tone Portamento                     3xx : up/down speed                            pitch (w. note assignment)
 4 ✖ Vibrato                             4xy : x-speed,   y-depth                       pitch (w. waveform)
 5 ✖ Tone Portamento + Volume Slide      5xy : x-upspeed, y-downspeed                   pitch/volume (w. note assignment)
 6 ✖ Vibrato + Volume Slide              6xy : x-upspeed, y-downspeed                   pitch/volume (w. waveform)
 7 ✖ Tremolo                             7xy : x-speed,   y-depth                       volume (w. waveform)
 8   NOT USED
-9 ✖ Set SampleOffset                    9xx : offset (23 -> 2300)                      sample offset
-A ✔️ VolumeSlide                         Axy : x-upspeed, y-downspeed                   volume
-B ✖ Position Jump                       Bxx : songposition                             position
-C ✔️ Set Volume                          Cxx : volume, 00-40                            volume
-D ✔️ Pattern Break (FIXME)               Dxx : break position in next patt              position
+9 ✖ Set SampleOffset                    9xx : offset (23 -> 2300)                      sample offset (applied once)
+A ✔️ VolumeSlide                         Axy : x-upspeed, y-downspeed                   volume (applied once per beat)
+B ✖ Position Jump                       Bxx : songposition                             position (GLOBAL! applied once)
+C ✔️ Set Volume                          Cxx : volume, 00-40                            volume (applied once)
+D ✔️ Pattern Break (FIXME)               Dxx : break position in next patt              position (GLOBAL! applied once)
 E   E-Commands                          Exy : see below...
-F ✔️ Set Speed                           Fxx : speed (00-1F) / tempo (20-FF)            speed
+F ✔️ Set Speed                           Fxx : speed (00-1F) / tempo (20-FF)            speed (GLOBAL! applied once)
 ----------------------------------------------------------------------------
 E0✖ Set Filter                          E0x : 0-filter on, 1-filter off
 E1✖ FineSlide Up                        E1x : value
