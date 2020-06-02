@@ -147,7 +147,7 @@ func (m Module) Info() {
 		if ins.Len == 0 {
 			continue
 		}
-		fmt.Printf("    %s : Offs %x, Len %d, Finetune %d, Vol %d, RepS %d, RepL %d\n", ins.Name, ins.Offset, ins.Len, ins.Finetune, ins.Volume, ins.RepStart, ins.RepLen)
+		fmt.Printf("    %s : Offs %x, Len %x, RepS %x, RepL %x; Finetune %d, Vol %d\n", ins.Name, ins.Offset, ins.Len, ins.RepStart, ins.RepLen, ins.Finetune, ins.Volume)
 	}
 
 	EffStats := make([]int, 32)
@@ -186,10 +186,12 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 	// Signature (also tells us the number of instruments)
 	copy(mod.Signature[0:4], data[1080:1084])
+	// These are the default parameters for
 	mod.InstrTableLen = 31
 	signatureLen := 4
 	for _, c := range mod.Signature {
 		// if the signature is not an ASCII string, we have an old module with 15 instruments
+		// FIXME: set the parameters depending on the various known signatures
 		if c < 32 {
 			mod.InstrTableLen = 15
 			signatureLen = 0 // in old modules without "M.K." (or similar) signature, there is no space for it either. Duh...
@@ -198,7 +200,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 	// Pattern Table (have to read this first because this tells us the number of patterns)
 	patternTableOffset := 20 + mod.InstrTableLen*30 + 2
-	patternTableLen := int(data[20+mod.InstrTableLen*30+1])
+	patternTableLen := int(data[20+mod.InstrTableLen*30 /*+1*/]) // 20+31*30
 	mod.PatternTable = make([]int, patternTableLen)
 	for i := 0; i < patternTableLen; i++ {
 		mod.PatternTable[i] = int(data[patternTableOffset+i])
@@ -206,7 +208,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 			mod.PatternCnt = mod.PatternTable[i] + 1
 		}
 	}
-	fmt.Printf("%+v\n", mod)
+	//fmt.Printf("%+v\n", mod)
 
 	// Instruments
 	// We read the samples from the end of the file - this assumes that there is no additional data at the end of the file.
