@@ -27,15 +27,18 @@ const (
 // Player plays a mod file
 type Player struct {
 	Module
-	curPattern int       // the pattern table index currently played
-	curLine    int       // the position inside the pattern
-	curBeat    int       // the current beat (curTempo gives the number of beats until the next pattern line)
-	curTiming  int       // the number of samples left until the next beat
-	curSPB     int       // samples per beat
-	curBPM     int       // so-called "beats per minute", but actually freq = curBPM * 0,4 Hz
-	curTempo   int       // the number of beats per pattern line
-	chans      []Channel // the channels for playing
-	ended      bool
+
+	curPattern int // cur play position part 1: the pattern table index currently played
+	curLine    int // cur play position part 2: the position inside the pattern
+	curBeat    int // cur play position part 3: the current beat/tick (curTempo gives the number of beats/ticks until the next pattern line)
+	curTiming  int // cur play position part 4: the number of samples left until the next beat/tick (depends on the sample rate we are playing at)
+
+	curTempo int // play speed part 1: the number of beats per pattern line (default 6)
+	curBPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
+	curSPB   int // samples per beat (depends on the sample rate we are playing at)
+
+	chans []Channel // the channels for playing
+	ended bool      // indicates whether playing has ended
 }
 
 // Channel is an individual channel of a Player
@@ -44,10 +47,12 @@ type Channel struct {
 	ins             *Instrument // the instrument currently played
 	pos, step       float32     // the position inside the sample and the step with which to advance the position
 	firstTickOfNote bool        // is this the first tick where we play this note?
-	period          int         // current period
-	periodΔ         int         // period delta (value to add/subtract for pitch bending)
-	volume          int         // current volume
-	volumeΔ         int         // volume delta (value to add/subtract for volume slides)
+
+	// parameters for effects currently played
+	period  int // current period
+	periodΔ int // period delta (value to add/subtract for pitch bending)
+	volume  int // current volume
+	volumeΔ int // volume delta (value to add/subtract for volume slides)
 }
 
 // NewPlayer creates a Player object for the module mod
@@ -56,22 +61,10 @@ func NewPlayer(mod Module) *Player {
 	return &Player{
 		Module:   mod,
 		chans:    make([]Channel, 4), // we currently only support 4-channel modules
-		curBPM:   125,
 		curTempo: 6,
+		curBPM:   125,
 		curSPB:   int(float64(sampleRate) / (.4 * 125)),
 	}
-}
-
-// InterpolateHermite4pt3oX interpolates the output waveform
-func (p *Player) InterpolateHermite4pt3oX(x0, x1, x2, x3 int8, t float32) int {
-	return int(x1)
-
-	// doesn't seem to make a difference (actually sounds slightly worse?!) - maybe not correct...
-	c0 := float32(x1)
-	c1 := float32(x2-x0) * .5
-	c2 := float32(x0) - float32(x1)*2.5 + float32(x2)*2 - float32(x3)*.5
-	c3 := float32(x3-x0)*.5 + float32(x1-x2)*1.5
-	return int((((((c3 * t) + c2) * t) + c1) * t) + c0)
 }
 
 func findEffect(notes []Note, eff EffectType) (byte, bool) {
@@ -130,6 +123,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 				if note.EffCode != 0 {
 					fmt.Printf("Eff %v\n", note.EffType)
 					// If we have an effect, set it on new or currently playing note
+					// TODO move to "Effect.Start()" method
 					switch note.EffType {
 					case SlideUp:
 						p.chans[i].periodΔ = -int(note.Par())
@@ -166,6 +160,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 			p.curBeat++
 
 			// some effects have to be reapplied with each beat
+			// TODO: move to "Effect.Reapply()" method
 			for i := range p.chans {
 				if p.chans[i].periodΔ != 0 && !p.chans[i].firstTickOfNote {
 					p.chans[i].period += p.chans[i].periodΔ
@@ -217,8 +212,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 			}
 			pos64, subpos64 := math.Modf(float64(ch.pos))
 			pos := int(pos64)
-			//subpos = 0 // This disables the "interpolation"
-			val := p.InterpolateHermite4pt3oX(
+			val := Interpolate(
 				ch.ins.Sample[pos-1], ch.ins.Sample[pos],
 				ch.ins.Sample[pos+1], ch.ins.Sample[pos+2],
 				float32(subpos64),

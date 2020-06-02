@@ -7,19 +7,6 @@ import (
 	"strings"
 )
 
-// Instrument represents an instrument used in a MOD file, including the sample data
-type Instrument struct {
-	Num      int
-	Name     string
-	Len      int
-	Finetune int
-	Volume   int
-	RepStart int
-	RepLen   int
-	Offset   int
-	Sample   []int8
-}
-
 // EffectType represents a module effect
 type EffectType int
 
@@ -93,7 +80,7 @@ const (
 
 //go:generate stringer -type=EffectType
 
-// Effect is an effect (mostly applied to a note)
+// Effect is an effect/command (encoded as part of a note, but may affect the whole song)
 type Effect struct {
 	EffType EffectType
 	EffCode uint16
@@ -109,9 +96,22 @@ func (e Effect) ParX() byte {
 	return byte(e.EffCode & 0xF0 >> 4)
 }
 
-// ParY returns the parameter byte in its entirety
+// ParY returns the second nibble of the parameter byte
 func (e Effect) ParY() byte {
 	return byte(e.EffCode & 0x0F)
+}
+
+// Instrument represents an instrument used in a MOD file, including the sample data
+type Instrument struct {
+	Num      int
+	Name     string
+	Len      int
+	Finetune int
+	Volume   int
+	RepStart int
+	RepLen   int
+	Offset   int
+	Sample   []int8
 }
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
@@ -186,7 +186,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 
 	// Signature (also tells us the number of instruments)
 	copy(mod.Signature[0:4], data[1080:1084])
-	// These are the default parameters for
+	// These are the default parameters for "original" SoundTracker modules (without signature)
 	mod.InstrTableLen = 31
 	signatureLen := 4
 	for _, c := range mod.Signature {
@@ -275,8 +275,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 2         Length of sample repeat in words. Only loop if greater than 1.
 */
 
-// ReadInstrument reads an instrument from the MOD file data, including the sample data.
-// The offset of the instrument data and the sampleOffset have to be passed as a parameter.
+// ReadInstrument constructs an instrument from the given instrData slice
 func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 	ins.Name = strings.Trim(string(instrData[0:22]), " \t\n\v\f\r\x00")
 
