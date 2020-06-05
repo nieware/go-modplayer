@@ -87,8 +87,6 @@ func (p *Player) Read(buf []byte) (int, error) {
 	for bufIdx := 0; bufIdx < len(buf); bufIdx += bitDepthInBytes * channelNum {
 		// if we are at the start of a new line, init the notes and effects
 		if p.curBeat == 0 && p.curTiming == 0 {
-			fmt.Println(p.curPattern)
-
 			patt := p.Module.PatternTable[p.curPattern]
 			notes := p.Module.Patterns[patt][p.curLine]
 			fmt.Println(notes[0], notes[1], notes[2], notes[3])

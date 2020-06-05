@@ -142,6 +142,7 @@ func (m Module) Info() {
 	fmt.Println("Name:", m.Name)
 	fmt.Printf("Signature: %#v %s\n", m.Signature, string(m.Signature[0:4]))
 	fmt.Println("Patterns (used):", len(m.Patterns))
+	fmt.Println("Pattern sequence:", m.PatternTable)
 	fmt.Println("Instruments:")
 	for _, ins := range m.Instruments {
 		if ins.Len == 0 {
@@ -201,6 +202,9 @@ func ReadModFile(fn string) (mod Module, err error) {
 	// Pattern Table (have to read this first because this tells us the number of patterns)
 	patternTableOffset := 20 + mod.InstrTableLen*30 + 2
 	patternTableLen := int(data[20+mod.InstrTableLen*30 /*+1*/]) // 20+31*30
+	if patternTableLen > 128 {
+		patternTableLen = 128 // some MOD files (e.g. BeatWave.mod have patternTableLen > 128, which is illegal!)
+	}
 	mod.PatternTable = make([]int, patternTableLen)
 	for i := 0; i < patternTableLen; i++ {
 		mod.PatternTable[i] = int(data[patternTableOffset+i])
@@ -208,7 +212,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 			mod.PatternCnt = mod.PatternTable[i] + 1
 		}
 	}
-	//fmt.Printf("%+v\n", mod)
+	//fmt.Printf("offs %x, cnt %d, tableLen %d, %+v\n", patternTableOffset, mod.PatternCnt, patternTableLen, mod.PatternTable)
 
 	// Instruments
 	// We read the samples from the end of the file - this assumes that there is no additional data at the end of the file.
@@ -235,7 +239,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 	// Patterns
 	mod.Patterns = make([][][]Note, mod.PatternCnt)
 	patternsOffset := 20 + mod.InstrTableLen*30 + 2 + 128 + signatureLen
-	//fmt.Println("### Pff", mod.InstrTableLen, patternsOffset)
+	//fmt.Printf("PatternsOffset %x:\n", patternsOffset)
 	for i := range mod.Patterns {
 		mod.Patterns[i] = make([][]Note, 64)
 		//fmt.Printf("\n\nPattern %d:\n", i)
