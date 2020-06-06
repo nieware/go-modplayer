@@ -1,20 +1,41 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 )
 
+func decodeNote(noteToDecode string) {
+	noteData, err := hex.DecodeString(noteToDecode)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if len(noteData) < 4 {
+		fmt.Println("not enough data to decode")
+		os.Exit(1)
+	}
+	note := ReadNote(noteData, &Module{})
+	note.Details()
+}
+
 func main() {
 	infoOnly := flag.Bool("info", false, "only show module info")
 	playSamples := flag.Bool("samples", false, "play only the samples rather than the complete song")
+	noteToDecode := flag.String("note", "", "specify a note to decode")
 	flag.Usage = Usage
 	flag.Parse()
 
+	if *noteToDecode != "" {
+		decodeNote(*noteToDecode)
+		return
+	}
+
 	if len(flag.Args()) < 1 {
 		fmt.Println("file name not specified")
-		return
+		os.Exit(1)
 	}
 	fn := flag.Args()[0]
 	fmt.Println(fn)

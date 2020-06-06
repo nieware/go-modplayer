@@ -116,6 +116,7 @@ type Instrument struct {
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
 type Note struct {
+	InsNum int
 	Ins    *Instrument
 	Period int
 	Effect
@@ -144,11 +145,12 @@ func (m Module) Info() {
 	fmt.Println("Patterns (used):", len(m.Patterns))
 	fmt.Println("Pattern sequence:", m.PatternTable)
 	fmt.Println("Instruments:")
-	for _, ins := range m.Instruments {
+	for idx, ins := range m.Instruments {
 		if ins.Len == 0 {
 			continue
 		}
-		fmt.Printf("    %s : Offs %x, Len %x, RepS %x, RepL %x; Finetune %d, Vol %d\n", ins.Name, ins.Offset, ins.Len, ins.RepStart, ins.RepLen, ins.Finetune, ins.Volume)
+		fmt.Printf("    %d %s : Offs %x, Len %x, RepS %x, RepL %x; Finetune %d, Vol %d\n",
+			idx, ins.Name, ins.Offset, ins.Len, ins.RepStart, ins.RepLen, ins.Finetune, ins.Volume)
 	}
 
 	EffStats := make([]int, 32)
@@ -304,21 +306,29 @@ func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 func (n Note) String() string {
 	s := ""
 	if n.Period == 0 {
-		if n.Ins.Num == 0 && n.EffCode == 0 {
-			return "--------"
+		if n.InsNum == 0 && n.EffCode == 0 {
+			return "p---i--e---"
 		}
-		s += "---"
+		s += "p---"
 	} else {
-		s += fmt.Sprintf("%03d", n.Period)
+		s += fmt.Sprintf("p%03d", n.Period)
 	}
-	s += fmt.Sprintf("%02x%03x", n.Ins.Num, n.EffCode)
+	s += fmt.Sprintf("i%02xe%03x", n.InsNum, n.EffCode)
 	return s
+}
+
+func (n Note) Details() {
+	fmt.Println("Ins", n.InsNum)
+	fmt.Println("Period", n.Period)
+	fmt.Println("Effect", n.Effect)
 }
 
 // ReadNote constructs a Note from the given noteData slice
 func ReadNote(noteData []byte, mod *Module) (n Note) {
-	insNum := noteData[0]&0xF0 | (noteData[2]&0xF0)>>4
-	n.Ins = &mod.Instruments[insNum]
+	n.InsNum = int(noteData[0]&0xF0 | (noteData[2]&0xF0)>>4)
+	if len(mod.Instruments) > n.InsNum {
+		n.Ins = &mod.Instruments[n.InsNum]
+	}
 
 	bsl := []byte{noteData[0] & 0x0F, noteData[1]}
 	n.Period = (int)(binary.BigEndian.Uint16(bsl))

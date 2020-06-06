@@ -49,10 +49,12 @@ type Channel struct {
 	firstTickOfNote bool        // is this the first tick where we play this note?
 
 	// parameters for effects currently played
-	period  int // current period
-	periodΔ int // period delta (value to add/subtract for pitch bending)
-	volume  int // current volume
-	volumeΔ int // volume delta (value to add/subtract for volume slides)
+	period       int // current period
+	periodΔ      int // period delta (value to add/subtract for pitch bending)
+	targetPeriod int // target period for "slide to note"
+	volume       int // current volume
+	volumeΔ      int // volume delta (value to add/subtract for volume slides)
+
 }
 
 // NewPlayer creates a Player object for the module mod
@@ -103,6 +105,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 			for i := range p.chans {
 				note := p.Module.Patterns[patt][p.curLine][i]
 				if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
+					// FIXME: check if Portamento effects contain an instrument? Then we need to ignore it here...
 					// if we have an instrument, start playing a new note
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
@@ -116,39 +119,55 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
 					//fmt.Println("ch", i, "-> active, step", p.chans[i].step)
 				}
-				p.chans[i].periodΔ = 0
-				p.chans[i].volumeΔ = 0
 				if note.EffCode != 0 {
 					fmt.Printf("Eff %v\n", note.EffType)
-					// If we have an effect, set it on new or currently playing note
-					// TODO move to "Effect.Start()" method
-					switch note.EffType {
-					case SlideUp:
-						p.chans[i].periodΔ = -int(note.Par())
-					case SlideDown:
-						p.chans[i].periodΔ = int(note.Par())
-					case VolSlide:
-						fmt.Printf("Eff X%d Y%d\n", note.ParX(), note.ParY())
-						if note.ParX() > 0 {
-							p.chans[i].volumeΔ = int(note.ParX())
+				}
+				// If we have an effect, set it on new or currently playing note
+				switch note.EffType {
+				case SlideUp:
+					p.chans[i].periodΔ = -int(note.Par())
+					p.chans[i].volumeΔ = 0
+				case SlideDown:
+					p.chans[i].periodΔ = int(note.Par())
+					p.chans[i].volumeΔ = 0
+				case Portamento:
+					if note.Par() != 0 {
+						p.chans[i].targetPeriod = note.Period
+						if note.Period > p.chans[i].period {
+							p.chans[i].periodΔ = int(note.Par())
 						} else {
-							p.chans[i].volumeΔ = -int(note.ParY())
-						}
-					case SetVol:
-						p.chans[i].volume = int(note.Par())
-					/*case PatternBreak:
-					p.curPattern++
-					p.curTiming, p.curBeat = 0, 0
-					p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
-					case SetSpeed:
-						if note.Par() <= 0x1F {
-							p.curTempo = int(note.Par())
-						} else {
-							p.curBPM = int(note.Par())
+							p.chans[i].periodΔ = -int(note.Par())
 						}
 					}
-					fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
+					p.chans[i].volumeΔ = 0
+				case VolSlide, PortamentoVolSlide:
+					if note.ParX() > 0 {
+						p.chans[i].volumeΔ = int(note.ParX())
+					} else {
+						p.chans[i].volumeΔ = -int(note.ParY())
+					}
+					if note.EffType == VolSlide {
+						p.chans[i].periodΔ = 0
+					}
+				case SetVol:
+					p.chans[i].volume = int(note.Par())
+					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
+				/*case PatternBreak:
+				p.curPattern++
+				p.curTiming, p.curBeat = 0, 0
+				p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
+				case SetSpeed:
+					if note.Par() <= 0x1F {
+						p.curTempo = int(note.Par())
+					} else {
+						p.curBPM = int(note.Par())
+					}
+					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
+				default:
+					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
 				}
+
+				//fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
 			}
 		}
 
@@ -158,9 +177,12 @@ func (p *Player) Read(buf []byte) (int, error) {
 			p.curBeat++
 
 			// some effects have to be reapplied with each beat
-			// TODO: move to "Effect.Reapply()" method
 			for i := range p.chans {
 				if p.chans[i].periodΔ != 0 && !p.chans[i].firstTickOfNote {
+					if p.chans[i].targetPeriod != 0 && intAbs(p.chans[i].targetPeriod-p.chans[i].period) < intAbs(p.chans[i].periodΔ) {
+						p.chans[i].period = p.chans[i].targetPeriod
+						p.chans[i].periodΔ = 0
+					}
 					p.chans[i].period += p.chans[i].periodΔ
 					fmt.Println("per", p.chans[i].period)
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
@@ -219,8 +241,8 @@ func (p *Player) Read(buf []byte) (int, error) {
 			mix[chanTab[i]] += val * ch.volume
 			p.chans[i].pos += ch.step
 			if p.chans[i].pos >= float32(len(ch.ins.Sample)-2) {
-				if ch.ins.RepStart != 0 {
-					p.chans[i].pos = float32(ch.ins.RepStart) // repeat TODO: handle RepLen - but how?!
+				if ch.ins.RepLen > 2 {
+					p.chans[i].pos = float32(ch.ins.RepStart + 2) // repeat TODO: handle RepLen - but how?!
 				} else {
 					p.chans[i].active = false // played out
 				}
@@ -254,6 +276,13 @@ func Play(mod Module) error {
 		return err
 	}
 	return nil
+}
+
+func intAbs(i int) int {
+	if i < 0 {
+		return -i
+	}
+	return i
 }
 
 func init() {
