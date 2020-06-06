@@ -205,7 +205,7 @@ func ReadModFile(fn string) (mod Module, err error) {
 	patternTableOffset := 20 + mod.InstrTableLen*30 + 2
 	patternTableLen := int(data[20+mod.InstrTableLen*30 /*+1*/]) // 20+31*30
 	if patternTableLen > 128 {
-		patternTableLen = 128 // some MOD files (e.g. BeatWave.mod have patternTableLen > 128, which is illegal!)
+		patternTableLen = 128 // some MOD files (e.g. BeatWave.mod) have patternTableLen > 128, which is illegal!
 	}
 	mod.PatternTable = make([]int, patternTableLen)
 	for i := 0; i < patternTableLen; i++ {
@@ -317,6 +317,7 @@ func (n Note) String() string {
 	return s
 }
 
+// Details prints detailed info about the given note
 func (n Note) Details() {
 	fmt.Println("Ins", n.InsNum)
 	fmt.Println("Period", n.Period)
