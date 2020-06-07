@@ -14,15 +14,15 @@ type PeriodProcessor struct {
 
 // PeriodFromNote initializes the period (pitch) effects for the given note
 func (ppu *PeriodProcessor) PeriodFromNote(note Note) {
+	resetSlide := true
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// FIXME: check if Portamento effects contain an instrument? Then we need to ignore it here...
 		ppu.period = note.Period
-		ppu.periodΔ = 0
 	}
 
 	switch note.EffType {
 	case Arpeggio:
-		ppu.periodΔ = 0
+		// TODO
 	case SlideUp:
 		ppu.periodΔ = -int(note.Par())
 	case SlideDown:
@@ -36,22 +36,28 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note) {
 				ppu.periodΔ = -int(note.Par())
 			}
 		}
-	//case Vibrato:
+		resetSlide = false
+	case Vibrato, VibratoVolSlide:
+		// TODO
 	case FineSlideUp:
 		ppu.period -= int(note.ParY())
 	case FineSlideDown:
 		ppu.period += int(note.ParY())
 	//case GlissandoControl:
 	//case SetVibratoWaveform:
-	case VibratoVolSlide:
-		ppu.periodΔ = 0
 	case PortamentoVolSlide:
+		resetSlide = false
 		// TODO: reset vibrato!
 	case Tremolo, VolSlide, SetVol, FineVolSlideUp, FineVolSlideDown, NoteCut:
 		ppu.periodΔ = 0
 		ppu.targetPeriod = 0
 	}
 
+	if resetSlide {
+		ppu.periodΔ = 0
+	}
+
+	//fmt.Printf("N %#v Δ %d\n", note, ppu.periodΔ)
 }
 
 // PeriodOnTick computes the period value for the given tick

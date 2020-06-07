@@ -101,6 +101,15 @@ func (e Effect) ParY() byte {
 	return byte(e.EffCode & 0x0F)
 }
 
+func findEffect(notes []Note, eff EffectType) (byte, bool) {
+	for _, note := range notes {
+		if note.EffType == eff {
+			return note.Par(), true
+		}
+	}
+	return 0, false
+}
+
 // Instrument represents an instrument used in a MOD file, including the sample data
 type Instrument struct {
 	Num      int
