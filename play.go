@@ -30,12 +30,12 @@ type Player struct {
 
 	curPattern int // cur play position part 1: the pattern table index currently played
 	curLine    int // cur play position part 2: the position inside the pattern
-	curBeat    int // cur play position part 3: the current beat/tick (curTempo gives the number of beats/ticks until the next pattern line)
-	curTiming  int // cur play position part 4: the number of samples left until the next beat/tick (depends on the sample rate we are playing at)
+	curTick    int // cur play position part 3: the current tick (curTempo gives the number of ticks until the next pattern line)
+	curTiming  int // cur play position part 4: the number of samples left until the next tick (depends on the sample rate we are playing at)
 
-	curTempo int // play speed part 1: the number of beats per pattern line (default 6)
+	curTempo int // play speed part 1: number of ticks per pattern line (default 6)
 	curBPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
-	curSPB   int // samples per beat (depends on the sample rate we are playing at)
+	curSPB   int // samples per tick (depends on the sample rate we are playing at)
 
 	chans []Channel // the channels for playing
 	ended bool      // indicates whether playing has ended
@@ -48,13 +48,8 @@ type Channel struct {
 	pos, step       float32     // the position inside the sample and the step with which to advance the position
 	firstTickOfNote bool        // is this the first tick where we play this note?
 
-	// parameters for effects currently played
-	period       int // current period
-	periodΔ      int // period delta (value to add/subtract for pitch bending)
-	targetPeriod int // target period for "slide to note"
-	volume       int // current volume
-	volumeΔ      int // volume delta (value to add/subtract for volume slides)
-
+	PeriodProcessor
+	VolumeProcessor
 }
 
 // NewPlayer creates a Player object for the module mod
@@ -88,7 +83,7 @@ func (p *Player) Read(buf []byte) (int, error) {
 	var bufLen = len(buf)
 	for bufIdx := 0; bufIdx < len(buf); bufIdx += bitDepthInBytes * channelNum {
 		// if we are at the start of a new line, init the notes and effects
-		if p.curBeat == 0 && p.curTiming == 0 {
+		if p.curTick == 0 && p.curTiming == 0 {
 			patt := p.Module.PatternTable[p.curPattern]
 			notes := p.Module.Patterns[patt][p.curLine]
 			fmt.Println(notes[0], notes[1], notes[2], notes[3])
@@ -110,10 +105,6 @@ func (p *Player) Read(buf []byte) (int, error) {
 					p.chans[i].active = true
 					p.chans[i].ins = note.Ins
 					p.chans[i].pos = 1 // needed because of interpolation
-					p.chans[i].period = note.Period
-					p.chans[i].periodΔ = 0
-					p.chans[i].volume = note.Ins.Volume
-					p.chans[i].volumeΔ = 0
 					p.chans[i].firstTickOfNote = true
 					// Amiga PAL clock freq. 3546894.6
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
@@ -123,38 +114,13 @@ func (p *Player) Read(buf []byte) (int, error) {
 					fmt.Printf("Eff %v\n", note.EffType)
 				}
 				// If we have an effect, set it on new or currently playing note
+				p.chans[i].PeriodFromNote(note)
+				p.chans[i].VolumeFromNote(note)
 				switch note.EffType {
-				case SlideUp:
-					p.chans[i].periodΔ = -int(note.Par())
-					p.chans[i].volumeΔ = 0
-				case SlideDown:
-					p.chans[i].periodΔ = int(note.Par())
-					p.chans[i].volumeΔ = 0
-				case Portamento:
-					if note.Par() != 0 {
-						p.chans[i].targetPeriod = note.Period
-						if note.Period > p.chans[i].period {
-							p.chans[i].periodΔ = int(note.Par())
-						} else {
-							p.chans[i].periodΔ = -int(note.Par())
-						}
-					}
-					p.chans[i].volumeΔ = 0
-				case VolSlide, PortamentoVolSlide:
-					if note.ParX() > 0 {
-						p.chans[i].volumeΔ = int(note.ParX())
-					} else {
-						p.chans[i].volumeΔ = -int(note.ParY())
-					}
-					if note.EffType == VolSlide {
-						p.chans[i].periodΔ = 0
-					}
-				case SetVol:
-					p.chans[i].volume = int(note.Par())
-					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
+				// we only take care of position/timing commands here, the rest are handled by PPU/VPU
 				/*case PatternBreak:
 				p.curPattern++
-				p.curTiming, p.curBeat = 0, 0
+				p.curTiming, p.curTick = 0, 0
 				p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 				case SetSpeed:
 					if note.Par() <= 0x1F {
@@ -162,9 +128,6 @@ func (p *Player) Read(buf []byte) (int, error) {
 					} else {
 						p.curBPM = int(note.Par())
 					}
-					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
-				default:
-					p.chans[i].periodΔ, p.chans[i].volumeΔ = 0, 0
 				}
 
 				//fmt.Printf("N %#v Δ %d\n", note, p.chans[i].periodΔ)
@@ -174,38 +137,24 @@ func (p *Player) Read(buf []byte) (int, error) {
 		p.curTiming++
 		if p.curTiming >= p.curSPB {
 			p.curTiming = 0
-			p.curBeat++
+			p.curTick++
 
-			// some effects have to be reapplied with each beat
+			// some effects have to be reapplied with each tick
 			for i := range p.chans {
-				if p.chans[i].periodΔ != 0 && !p.chans[i].firstTickOfNote {
-					if p.chans[i].targetPeriod != 0 && intAbs(p.chans[i].targetPeriod-p.chans[i].period) < intAbs(p.chans[i].periodΔ) {
-						p.chans[i].period = p.chans[i].targetPeriod
-						p.chans[i].periodΔ = 0
-					}
-					p.chans[i].period += p.chans[i].periodΔ
-					fmt.Println("per", p.chans[i].period)
+				if !p.chans[i].firstTickOfNote {
+					p.chans[i].PeriodOnTick(p.curTick)
 					p.chans[i].step = 3546894.6 / float32(sampleRate*p.chans[i].period)
-				}
-				if p.chans[i].volumeΔ != 0 && !p.chans[i].firstTickOfNote {
-					p.chans[i].volume += p.chans[i].volumeΔ // FIXME: not sure if this is correct, seems to be too fast!
-					if p.chans[i].volume > 64 {
-						p.chans[i].volume = 64
-					}
-					if p.chans[i].volume < 0 {
-						p.chans[i].volume = 0
-					}
-					fmt.Println("vol", p.chans[i].volume)
+					p.chans[i].VolumeOnTick(p.curTick)
 				}
 				p.chans[i].firstTickOfNote = false
 			}
 		}
-		if p.curBeat >= p.curTempo {
-			p.curTiming, p.curBeat = 0, 0
+		if p.curTick >= p.curTempo {
+			p.curTiming, p.curTick = 0, 0
 			p.curLine++
 		}
 		if p.curLine >= 64 { // pattern len
-			p.curTiming, p.curBeat, p.curLine = 0, 0, 0
+			p.curTiming, p.curTick, p.curLine = 0, 0, 0
 			p.curPattern++
 		}
 		if p.curPattern >= len(p.Module.PatternTable) {
@@ -237,7 +186,6 @@ func (p *Player) Read(buf []byte) (int, error) {
 				ch.ins.Sample[pos+1], ch.ins.Sample[pos+2],
 				float32(subpos64),
 			)
-			//val := int(float64(ch.ins.Sample[int(pos)])*(1-subpos) + float64(ch.ins.Sample[int(pos)+1])*subpos)
 			mix[chanTab[i]] += val * ch.volume
 			p.chans[i].pos += ch.step
 			if p.chans[i].pos >= float32(len(ch.ins.Sample)-2) {
@@ -276,13 +224,6 @@ func Play(mod Module) error {
 		return err
 	}
 	return nil
-}
-
-func intAbs(i int) int {
-	if i < 0 {
-		return -i
-	}
-	return i
 }
 
 func init() {

@@ -18,8 +18,8 @@ E   E-Commands                          Exy : see below...
 F ✔️ Set Speed                           Fxx : speed (00-1F) / tempo (20-FF)            speed (GLOBAL! applied once)
 ----------------------------------------------------------------------------
 E0✖ Set Filter                          E0x : 0-filter on, 1-filter off                IGNORE
-E1✖ FineSlide Up                        E1x : value                                    PS VR (halfnotes (?), applied once)
-E2✖ FineSlide Down                      E2x : value                                    PS VR (halfnotes (?), applied once)
+E1✔️ FineSlide Up                        E1x : value                                    PS VR (halfnotes (?), applied once)
+E2✔️ FineSlide Down                      E2x : value                                    PS VR (halfnotes (?), applied once)
 E3✖ Glissando Control                   E3x : 0-off, 1-on (use with tonep.)            PF (->#3) 1 slide one halfnote at a time
 E4✖ Set Vibrato Waveform                E4x : 0-sine, 1-ramp down, 2-square            PF (->#4)
 E5✖ Set Loop                            E5x : set loop point / set finetune?!          instrument setting                 
@@ -27,8 +27,8 @@ E6✖ Jump to Loop                        E6x : set/jump to loop, play x times  
 E7✖ Set Tremolo Waveform                E7x : 0-sine, 1-ramp down. 2-square            VF (->#7)
 E8  NOT USED / Set Panning
 E9✖ Retrig Note                         E9x : retrig from note + x vblanks             sample pos. (applied once every x ticks)
-EA✖ Fine VolumeSlide Up                 EAx : add x to volume                          PR VS (applied once)
-EB✖ Fine VolumeSlide Down               EBx : subtract x from volume                   PR VS (applied once)
+EA✔️ Fine VolumeSlide Up                 EAx : add x to volume                          PR VS (applied once)
+EB✔️ Fine VolumeSlide Down               EBx : subtract x from volume                   PR VS (applied once)
 EC✖ NoteCut                             ECx : cut from note + x vblanks                PR VS (applied once after x ticks)
 ED✖ NoteDelay                           EDx : delay note x vblanks                     sample pos. (applied once after x ticks)
 EE✖ PatternDelay                        EEx : delay pattern x notes                    position (applied once after x ticks) 
@@ -42,13 +42,18 @@ PR - pitch reset (reset all pitch effects)
 PF - pitch flag (option affecting pitch calculation)
 
 VS - volume set (incl. slide/tremolo)
-VR - pitch reset (reset all volume effects)
-VF - pitch flag (option affecting volume calculation)
+VR - volume reset (reset all volume effects)
+VF - volume flag (option affecting volume calculation)
 
 ## Stats
 
-Base Effects: 08/14
-Ext. Effects: 00/15
+Implemented Base Effects: 08/14
+Implemented Ext. Effects: 04/13
+
+Pitch effects: 9 (7 pitch effects, 2 settings)
+Volume effects: 9 (8 volume effects, 1 settings)
+Position/timing commands: 10
+
 
 
 # Misc Notes
