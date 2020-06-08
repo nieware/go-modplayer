@@ -24,18 +24,26 @@ const (
 	bufferSize      = 4096
 )
 
-// Player plays a mod file
-type Player struct {
-	Module
+type Speed struct {
+	Tempo int // play speed part 1: number of ticks per pattern line (default 6)
+	BPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
+	SPB   int // samples per tick (depends on the sample rate we are playing at)
+}
 
+type Position struct {
 	curPattern int // cur play position part 1: the pattern table index currently played
 	curLine    int // cur play position part 2: the position inside the pattern
 	curTick    int // cur play position part 3: the current tick (curTempo gives the number of ticks until the next pattern line)
 	curTiming  int // cur play position part 4: the number of samples left until the next tick (depends on the sample rate we are playing at)
+}
 
-	curTempo int // play speed part 1: number of ticks per pattern line (default 6)
-	curBPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
-	curSPB   int // samples per tick (depends on the sample rate we are playing at)
+// Player plays a mod file
+type Player struct {
+	Module
+
+	Position
+
+	Speed
 
 	chans []Channel // the channels for playing
 	ended bool      // indicates whether playing has ended
@@ -43,11 +51,12 @@ type Player struct {
 
 // Channel is an individual channel of a Player
 type Channel struct {
-	index           int         // the number of this channel
-	active          bool        // is the channel currently playing something? Set to false if the sample has "played out"
-	ins             *Instrument // the instrument currently played
-	pos, step       float32     // the position inside the sample and the step with which to advance the position
-	firstTickOfNote bool        // is this the first tick where we play this note?
+	index           int     // the number of this channel
+	active          bool    // is the channel currently playing something? Set to false if the sample has "played out"
+	note            *Note   // currently playing note
+	pos, step       float32 // the position inside the sample and the step with which to advance the position
+	firstTickOfNote bool    // is this the first tick where we play this note?
+	tickCnt         byte    // tick counter for note retrig/cut/delay
 
 	PeriodProcessor // this channel's "PPU" (period/pitch processing unit)
 	VolumeProcessor // this channel's "VPU" (volume processing unit)
@@ -56,12 +65,15 @@ type Channel struct {
 // NewPlayer creates a Player object for the module mod
 func NewPlayer(mod Module) *Player {
 	p := &Player{
-		Module:   mod,
-		chans:    make([]Channel, 4), // we currently only support 4-channel modules
-		curTempo: 6,
-		curBPM:   125,
-		curSPB:   int(float64(sampleRate) / (.4 * 125)),
+		Module: mod,
+		chans:  make([]Channel, 4), // we currently only support 4-channel modules
 	}
+	p.Speed = Speed{
+		Tempo: 6,
+		BPM:   125,
+		SPB:   int(float64(sampleRate) / (.4 * 125)),
+	}
+
 	for i := range p.chans {
 		p.chans[i].index = i
 	}
@@ -79,10 +91,10 @@ func (ch *Channel) SetPeriod(period int) {
 func (ch *Channel) OnNote(note Note) {
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// if we have an instrument, start playing a new note
+		ch.note = &note
 		ch.firstTickOfNote = true
 		ch.active = true
-		ch.ins = note.Ins
-		ch.pos = 1 // needed because of interpolation
+		ch.pos = 0
 	}
 	// If we have an effect, set it on new or currently playing note
 	ch.PeriodFromNote(note)
@@ -94,9 +106,18 @@ func (ch *Channel) OnNote(note Note) {
 	} //*/
 
 	switch note.EffType {
-	// nothing here so far...
+	case SetSampleOffset:
+		if ch.active {
+			ch.pos = float32(int(note.Effect.Par()) << 9)
+		}
+	case RetrigNote, NoteCut, NoteDelay:
+		ch.tickCnt = note.Effect.ParY()
+		ch.active = note.EffType != NoteDelay
 	}
 
+	if ch.pos < 1 {
+		ch.pos = 1
+	}
 }
 
 // OnTick computes the necessary parameters for the given tick
@@ -107,6 +128,27 @@ func (ch *Channel) OnTick(curTick int) {
 		ch.VolumeOnTick(curTick)
 	}
 	ch.firstTickOfNote = false
+
+	ch.tickCnt--
+	if ch.note == nil || ch.note.Ins == nil {
+		return
+	}
+	switch ch.note.EffType {
+	case RetrigNote:
+		if ch.tickCnt == 0 {
+			ch.pos = 1
+			ch.tickCnt = ch.note.Effect.ParY()
+		}
+	case NoteCut:
+		if ch.tickCnt == 0 {
+			ch.active = false
+		}
+	case NoteDelay:
+		if ch.tickCnt == 0 {
+			ch.active = true
+		}
+	}
+
 }
 
 // GetNextSample advances the internal counter and returns the value for the next sample to be
@@ -115,25 +157,21 @@ func (ch *Channel) GetNextSample() int {
 	if !ch.active {
 		return 0
 	}
-	if ch.ins == nil {
-		fmt.Println("ch.ins nil!")
-		return 0
-	}
-	if ch.ins.Sample == nil {
-		fmt.Println("ch.ins.Sample nil!")
+	if ch.note == nil || ch.note.Ins == nil || ch.note.Ins.Sample == nil {
+		fmt.Println("ch.note/ch.note.Ins/ch.note.Ins.Sample nil!")
 		return 0
 	}
 	pos64, subpos64 := math.Modf(float64(ch.pos))
 	pos := int(pos64)
 	val := Interpolate(
-		ch.ins.Sample[pos-1], ch.ins.Sample[pos],
-		ch.ins.Sample[pos+1], ch.ins.Sample[pos+2],
+		ch.note.Ins.Sample[pos-1], ch.note.Ins.Sample[pos],
+		ch.note.Ins.Sample[pos+1], ch.note.Ins.Sample[pos+2],
 		float32(subpos64),
 	)
 	ch.pos += ch.step
-	if ch.pos >= float32(len(ch.ins.Sample)-2) {
-		if ch.ins.RepLen > 2 {
-			ch.pos = float32(ch.ins.RepStart + 2) // repeat TODO: handle RepLen - but how?!
+	if ch.pos >= float32(len(ch.note.Ins.Sample)-2) {
+		if ch.note.Ins.RepLen > 2 {
+			ch.pos = float32(ch.note.Ins.RepStart + 2) // repeat TODO: handle RepLen - but how?!
 		} else {
 			ch.active = false // played out
 		}
@@ -176,16 +214,16 @@ func (p *Player) GetNextSamples() (int, int) {
 			p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 			case SetSpeed:
 				if note.Par() <= 0x1F {
-					p.curTempo = int(note.Par())
+					p.Tempo = int(note.Par())
 				} else {
-					p.curBPM = int(note.Par())
+					p.BPM = int(note.Par())
 				}
 			}
 		}
 	}
 
 	p.curTiming++
-	if p.curTiming >= p.curSPB {
+	if p.curTiming >= p.SPB {
 		p.curTiming = 0
 		p.curTick++
 
@@ -194,7 +232,7 @@ func (p *Player) GetNextSamples() (int, int) {
 			p.chans[i].OnTick(p.curTick)
 		}
 	}
-	if p.curTick >= p.curTempo {
+	if p.curTick >= p.Tempo {
 		p.curTiming, p.curTick = 0, 0
 		p.curLine++
 	}
