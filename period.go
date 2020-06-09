@@ -2,18 +2,24 @@ package main
 
 import "fmt"
 
+type arpeggioEntry struct {
+	pΔ      int
+	maxTick int
+}
+
 // PeriodProcessor is responsible for calculating the current period (=pitch) for a channel
 // considering currently active effect(s)
 type PeriodProcessor struct {
-	period       int // current period
-	periodΔ      int // period delta (value to add/subtract for pitch slides)
-	targetPeriod int // target period for "slide to note"
+	period       int             // current period
+	periodΔ      int             // period delta (value to add/subtract for pitch slides)
+	arpeggio     []arpeggioEntry // periods for arpeggio
+	targetPeriod int             // target period for "slide to note"
 
 	EffectWaveform
 }
 
 // PeriodFromNote initializes the period (pitch) effects for the given note
-func (ppu *PeriodProcessor) PeriodFromNote(note Note) {
+func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 	resetSlide := true
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// FIXME: check if Portamento effects contain an instrument? Then we need to ignore it here...
@@ -22,11 +28,30 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note) {
 
 	switch note.EffType {
 	case Arpeggio:
-		// TODO
+		if note.ParX() > 0 && note.ParY() > 0 {
+			ppu.arpeggio = make([]arpeggioEntry, 3)
+			div := speed.Tempo / 3
+			maxTick := speed.Tempo - 2*div - 1
+			ppu.arpeggio[0] = arpeggioEntry{note.Period, maxTick}
+			ppu.arpeggio[1] = arpeggioEntry{note.IncDec(int(note.ParX())), maxTick + div}
+			ppu.arpeggio[2] = arpeggioEntry{note.IncDec(int(note.ParY())), speed.Tempo - 1}
+			fmt.Println(ppu.arpeggio)
+		} else if note.ParX() > 0 {
+			ppu.arpeggio = make([]arpeggioEntry, 2)
+			div := speed.Tempo / 2
+			maxTick := speed.Tempo - div - 1
+			ppu.arpeggio[0] = arpeggioEntry{note.Period, maxTick}
+			ppu.arpeggio[1] = arpeggioEntry{note.IncDec(int(note.ParX())), speed.Tempo - 1}
+			fmt.Println(ppu.arpeggio)
+		} else {
+			ppu.arpeggio = make([]arpeggioEntry, 0)
+		}
 	case SlideUp:
 		ppu.periodΔ = -int(note.Par())
+		resetSlide = false
 	case SlideDown:
 		ppu.periodΔ = int(note.Par())
+		resetSlide = false
 	case Portamento:
 		if note.Par() != 0 {
 			ppu.targetPeriod = note.Period

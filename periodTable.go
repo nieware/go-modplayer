@@ -9,15 +9,27 @@ import "fmt"
 // Octave 3: 214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120, 113
 // Octave 4: 107, 101,  95,  90,  85,  80,  76,  71,  67,  64,  60,  57 (non-standard)
 
-type PeriodTable []NotePeriod
+// PeriodTables is a slice containing all 15 period tables (initialized on startup)
+var PeriodTables [15]PeriodTable
 
-type NotePeriod struct {
-	fineTune int
-	octave   int
-	note     string
-	period   int
+func init() {
+	for i := range PeriodTables {
+		PeriodTables[i] = NewPeriodTable(i)
+	}
 }
 
+// PeriodTable is a slice of NotePeriod structs
+type PeriodTable []NotePeriod
+
+// NotePeriod holds the note values for a given period and fineTune value
+type NotePeriod struct {
+	fineTune int
+	period   int
+	octave   int
+	note     string
+}
+
+// NewPeriodTable creates a PeriodTable for a given fineTune value
 func NewPeriodTable(fineTune int) PeriodTable {
 	var notes = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
@@ -31,9 +43,9 @@ func NewPeriodTable(fineTune int) PeriodTable {
 		for ni, note := range notes {
 			ret[(oct-minOctave)*12+ni] = NotePeriod{
 				fineTune,
+				periodTableData[fineTune][oct*12+ni],
 				oct,
 				note,
-				periodTables[fineTune][oct*12+ni],
 			}
 		}
 	}
@@ -41,18 +53,18 @@ func NewPeriodTable(fineTune int) PeriodTable {
 }
 
 // Find tries to find a period value in the NotePeriod table and returns the index
-func (pt *PeriodTable) Find(period int) (int, error) {
-	for ni, note := range *pt {
-		if note.period == period {
-			return ni, nil
+func (pt *PeriodTable) Find(period int) (NotePeriod, int, error) {
+	for ni, np := range *pt {
+		if np.period == period {
+			return np, ni, nil
 		}
 	}
-	return 0, fmt.Errorf("Note period %d not found", period)
+	return NotePeriod{}, 0, fmt.Errorf("Note period %d not found", period)
 }
 
 // IncDec increments/decrements a given period by the given delta value (expressed in half-notes)
 func (pt *PeriodTable) IncDec(period, delta int) (NotePeriod, error) {
-	idx, err := pt.Find(period)
+	_, idx, err := pt.Find(period)
 	if err != nil {
 		return NotePeriod{}, err
 	}
@@ -69,8 +81,8 @@ func (pt *PeriodTable) IncDec(period, delta int) (NotePeriod, error) {
 
 func (np *NotePeriod) String() string {
 	var note = np.note
-	if len(np.note) < 2 {
-		np.note += "-"
+	if len(note) < 2 {
+		note += "-"
 	}
 	return fmt.Sprintf("%s%d", note, np.octave)
 }
@@ -83,7 +95,7 @@ func (np *NotePeriod) String() string {
 // Notes are stored as periods in the MOD files, but some effects still
 // operate on notes, so we need these tables to find out which note we
 // are dealing with.
-var periodTables = [][]int{
+var periodTableData = [][]int{
 	// 0
 	{1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 906,
 		856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453,

@@ -22,8 +22,8 @@ E1✔️ FineSlide Up                        E1x : value                        
 E2✔️ FineSlide Down                      E2x : value                                    PS VR (halfnotes (?), applied once)
 E3✖ Glissando Control                   E3x : 0-off, 1-on (use with tonep.)            PF (->#3) 1 slide one halfnote at a time
 E4✖ Set Vibrato Waveform                E4x : 0-sine, 1-ramp down, 2-square            PF (->#4)
-E5✖ Set Loop                            E5x : set loop point / set finetune?!          IS instrument setting                 
-E6✖ Jump to Loop                        E6x : set/jump to loop, play x times           GL position (GLOBAL! applied once)
+E5✖ Set Loop (?)                        E5x : set loop point / set finetune?!          IS instrument setting
+E6✖ Jump to Loop (?)                    E6x : set/jump to loop, play x times           GL position (GLOBAL! applied once)
 E7✖ Set Tremolo Waveform                E7x : 0-sine, 1-ramp down. 2-square            VF (->#7)
 E8  NOT USED / Set Panning
 E9✔️ Retrig Note                         E9x : retrig from note + x vblanks             CH sample pos. (applied once every x ticks)
@@ -31,7 +31,7 @@ EA✔️ Fine VolumeSlide Up                 EAx : add x to volume              
 EB✔️ Fine VolumeSlide Down               EBx : subtract x from volume                   PR VS (applied once)
 EC✔️ NoteCut                             ECx : cut from note + x vblanks                CH channel active (applied once after x ticks)
 ED✔️ NoteDelay                           EDx : delay note x vblanks                     CH sample pos. (applied once after x ticks)
-EE✖ PatternDelay                        EEx : delay pattern x notes                    GL position (applied once after x ticks) 
+EE✖ PatternDelay                        EEx : delay pattern x notes                    GL delay (applied once after x ticks) -> "additional lines" counter
 EF✖ Invert Loop                         EFx : speed                                    ???
 
 ## Key

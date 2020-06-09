@@ -120,6 +120,7 @@ type Instrument struct {
 	RepStart int
 	RepLen   int
 	Offset   int
+	Periods  *PeriodTable
 	Sample   []int8
 }
 
@@ -296,8 +297,9 @@ func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 
 	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
 
-	// FIXME this is actually a signed nibble, but we are currently treating it as unsigned
+	// FIXME this is actually a signed nibble, but we are currently treating it as unsigned (0..15)
 	ins.Finetune = int(instrData[24] & 0x0F)
+	ins.Periods = &PeriodTables[ins.Finetune]
 
 	ins.Volume = int(instrData[25])
 
@@ -316,14 +318,31 @@ func (n Note) String() string {
 	s := ""
 	if n.Period == 0 {
 		if n.InsNum == 0 && n.EffCode == 0 {
-			return "p---i--e---"
+			return "---i--e---"
 		}
-		s += "p---"
+		s += "---"
 	} else {
-		s += fmt.Sprintf("p%03d", n.Period)
+		np, _, err := n.Ins.Periods.Find(n.Period)
+		if err == nil {
+			s += np.String()
+		} else {
+			s += fmt.Sprintf("%03d", n.Period)
+		}
 	}
 	s += fmt.Sprintf("i%02xe%03x", n.InsNum, n.EffCode)
 	return s
+}
+
+// IncDec increments/decrements this note by the given amount of halfNotes and returns the new period
+func (n Note) IncDec(halfNotes int) int {
+	if n.Ins == nil || n.Ins.Periods == nil {
+		return n.Period
+	}
+	np, err := n.Ins.Periods.IncDec(n.Period, halfNotes)
+	if err != nil {
+		return n.Period
+	}
+	return np.period
 }
 
 // Details prints detailed info about the given note

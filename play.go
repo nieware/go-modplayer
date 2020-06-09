@@ -24,12 +24,14 @@ const (
 	bufferSize      = 4096
 )
 
+// Speed holds all the parameters which affect the speed of playing a MOD file
 type Speed struct {
 	Tempo int // play speed part 1: number of ticks per pattern line (default 6)
 	BPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
 	SPB   int // samples per tick (depends on the sample rate we are playing at)
 }
 
+// Position holds all the parameters which determine the current play position in a MOD file
 type Position struct {
 	curPattern int // cur play position part 1: the pattern table index currently played
 	curLine    int // cur play position part 2: the position inside the pattern
@@ -88,7 +90,7 @@ func (ch *Channel) SetPeriod(period int) {
 
 // OnNote starts a new note on a channel if the note contains an instrument.
 // Some notes only contain effects, which are then applied on the currently playing note.
-func (ch *Channel) OnNote(note Note) {
+func (ch *Channel) OnNote(note Note, speed Speed) {
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// if we have an instrument, start playing a new note
 		ch.note = &note
@@ -97,7 +99,7 @@ func (ch *Channel) OnNote(note Note) {
 		ch.pos = 0
 	}
 	// If we have an effect, set it on new or currently playing note
-	ch.PeriodFromNote(note)
+	ch.PeriodFromNote(note, speed)
 	ch.SetPeriod(ch.period)
 	ch.VolumeFromNote(note)
 
@@ -145,6 +147,7 @@ func (ch *Channel) OnTick(curTick int) {
 		}
 	case NoteDelay:
 		if ch.tickCnt == 0 {
+			ch.pos = 1 // just to be sure...
 			ch.active = true
 		}
 	}
@@ -204,7 +207,7 @@ func (p *Player) GetNextSamples() (int, int) {
 			if note.EffCode != 0 {
 				fmt.Printf("Ch %d: Eff %v\n", i, note.EffType)
 			}
-			p.chans[i].OnNote(note)
+			p.chans[i].OnNote(note, p.Speed)
 
 			switch note.EffType {
 			// we only take care of global position/timing commands here, the rest are handled by the channel or its PPU/VPU
