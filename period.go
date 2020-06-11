@@ -2,19 +2,17 @@ package main
 
 import "fmt"
 
-type arpeggioEntry struct {
-	period  int
-	maxTick int
-}
-
 // PeriodProcessor is responsible for calculating the current period (=pitch) for a channel
 // considering currently active effect(s)
 type PeriodProcessor struct {
-	period       int             // current period
-	periodΔ      int             // period delta (value to add/subtract for pitch slides)
-	arpeggio     []arpeggioEntry // periods for arpeggio
-	targetPeriod int             // target period for "slide to note"
-	glissando    bool            // glissando flag (true - "slide to note" slides in halfnotes)
+	period       int   // current period
+	periodΔ      int   // period delta (value to add/subtract for pitch slides)
+	arpeggio     []int // periods for arpeggio
+	arpeggioIdx  int   // index in arpeggio array
+	targetPeriod int   // target period for "slide to note"
+	glissando    bool  // glissando flag (true - "slide to note" slides in halfnotes)
+
+	Ins *Instrument
 
 	EffectWaveform
 }
@@ -25,50 +23,41 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// FIXME: check if Portamento effects contain an instrument? Then we need to ignore it here...
 		ppu.period = note.Period
+		ppu.Ins = note.Ins
 	}
 
 	switch note.EffType {
 	case Arpeggio:
-		if note.ParX() > 0 && note.ParY() > 0 {
-			ppu.arpeggio = make([]arpeggioEntry, 3)
-			div := speed.Tempo / 3
-			maxTick := speed.Tempo - 2*div - 1
-			ppu.arpeggio[0] = arpeggioEntry{note.Period, maxTick}
-			ppu.arpeggio[1] = arpeggioEntry{note.IncDec(int(note.ParX())), maxTick + div}
-			ppu.arpeggio[2] = arpeggioEntry{note.IncDec(int(note.ParY())), speed.Tempo - 1}
-			fmt.Println(ppu.arpeggio)
-		} else if note.ParX() > 0 {
-			ppu.arpeggio = make([]arpeggioEntry, 2)
-			div := speed.Tempo / 2
-			maxTick := speed.Tempo - div - 1
-			ppu.arpeggio[0] = arpeggioEntry{note.Period, maxTick}
-			ppu.arpeggio[1] = arpeggioEntry{note.IncDec(int(note.ParX())), speed.Tempo - 1}
-			fmt.Println(ppu.arpeggio)
-		} else {
-			ppu.arpeggio = make([]arpeggioEntry, 0)
+		switch {
+		case note.ParX() > 0 && note.ParY() > 0:
+			ppu.arpeggio = []int{ppu.Ins.IncDec(ppu.period, note.ParX()), ppu.Ins.IncDec(ppu.period, note.ParY())}
+		case note.ParX() > 0:
+			ppu.arpeggio = []int{note.Ins.IncDec(ppu.period, note.ParX())}
+		default:
+			ppu.arpeggio = []int{}
 		}
 	case SlideUp:
-		ppu.periodΔ = -int(note.Par())
+		ppu.periodΔ = -note.Par()
 		resetSlide = false
 	case SlideDown:
-		ppu.periodΔ = int(note.Par())
+		ppu.periodΔ = note.Par()
 		resetSlide = false
 	case Portamento:
 		if note.Par() != 0 {
 			ppu.targetPeriod = note.Period
 			if note.Period > ppu.period {
-				ppu.periodΔ = int(note.Par())
+				ppu.periodΔ = note.Par()
 			} else {
-				ppu.periodΔ = -int(note.Par())
+				ppu.periodΔ = -note.Par()
 			}
 		}
 		resetSlide = false
 	case Vibrato, VibratoVolSlide:
 		// TODO
 	case FineSlideUp:
-		ppu.period -= int(note.ParY())
+		ppu.period -= note.ParY()
 	case FineSlideDown:
-		ppu.period += int(note.ParY())
+		ppu.period += note.ParY()
 	case GlissandoControl:
 		ppu.glissando = note.ParY() == 1
 	case SetVibratoWaveform:
@@ -100,17 +89,18 @@ func (ppu *PeriodProcessor) PeriodOnTick(curTick int) {
 		fmt.Println("per", ppu.period)
 	}
 
-	if len(ppu.arpeggio) > 0 {
-		fmt.Println("cur", curTick)
-		for _, arp := range ppu.arpeggio {
-			if curTick > arp.maxTick {
-				continue
-			}
-			ppu.period = arp.period
-			fmt.Println("arp", ppu.period)
-			break
-		}
+	ppu.arpeggioIdx++
+	if ppu.arpeggioIdx >= len(ppu.arpeggio) {
+		ppu.arpeggioIdx = 0
 	}
+}
+
+// GetPeriod gets the current period to be played
+func (ppu *PeriodProcessor) GetPeriod() int {
+	if ppu.arpeggioIdx > 0 {
+		return ppu.arpeggio[ppu.arpeggioIdx]
+	}
+	return ppu.period
 }
 
 func intAbs(i int) int {

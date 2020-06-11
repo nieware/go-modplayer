@@ -38,7 +38,6 @@ func main() {
 		os.Exit(1)
 	}
 	fn := flag.Args()[0]
-	fmt.Println(fn)
 	mod, err := ReadModFile(fn)
 	if err != nil {
 		fmt.Println(err)

@@ -22,7 +22,7 @@ type EffectWaveform struct {
 }
 
 // DecodeEffectWaveform creates an EffectWaveform struct from a "set waveform" command parameter
-func DecodeEffectWaveform(par byte) (ew EffectWaveform) {
+func DecodeEffectWaveform(par int) (ew EffectWaveform) {
 	ew.Retrig = par >= 4
 	switch par {
 	case 0, 4:
@@ -34,4 +34,5 @@ func DecodeEffectWaveform(par byte) (ew EffectWaveform) {
 	case 3, 7:
 		ew.Type = Random
 	}
+	return
 }

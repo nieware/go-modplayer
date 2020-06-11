@@ -87,21 +87,21 @@ type Effect struct {
 }
 
 // Par returns the parameter byte in its entirety
-func (e Effect) Par() byte {
-	return byte(e.EffCode & 0xFF)
+func (e Effect) Par() int {
+	return int(e.EffCode & 0xFF)
 }
 
 // ParX returns the first nibble of the parameter byte
-func (e Effect) ParX() byte {
-	return byte(e.EffCode & 0xF0 >> 4)
+func (e Effect) ParX() int {
+	return int(e.EffCode & 0xF0 >> 4)
 }
 
 // ParY returns the second nibble of the parameter byte
-func (e Effect) ParY() byte {
-	return byte(e.EffCode & 0x0F)
+func (e Effect) ParY() int {
+	return int(e.EffCode & 0x0F)
 }
 
-func findEffect(notes []Note, eff EffectType) (byte, bool) {
+func findEffect(notes []Note, eff EffectType) (int, bool) {
 	for _, note := range notes {
 		if note.EffType == eff {
 			return note.Par(), true
@@ -122,6 +122,18 @@ type Instrument struct {
 	Offset   int
 	Periods  *PeriodTable
 	Sample   []int8
+}
+
+// IncDec increments/decrements the given period by the given amount of halfNotes and returns the new period
+func (i Instrument) IncDec(period, halfNotes int) int {
+	if i.Periods == nil {
+		return period
+	}
+	np, err := i.Periods.IncDec(period, halfNotes)
+	if err != nil {
+		return period
+	}
+	return np.period
 }
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
@@ -218,9 +230,9 @@ func ReadModFile(fn string) (mod Module, err error) {
 		patternTableLen = 128 // some MOD files (e.g. BeatWave.mod) have patternTableLen > 128, which is illegal!
 	}
 	mod.PatternTable = make([]int, patternTableLen)
-	for i := 0; i < patternTableLen; i++ {
+	for i := range mod.PatternTable {
 		mod.PatternTable[i] = int(data[patternTableOffset+i])
-		if mod.PatternTable[i] > mod.PatternCnt {
+		if mod.PatternTable[i]+1 > mod.PatternCnt {
 			mod.PatternCnt = mod.PatternTable[i] + 1
 		}
 	}
@@ -331,18 +343,6 @@ func (n Note) String() string {
 	}
 	s += fmt.Sprintf("i%02xe%03x", n.InsNum, n.EffCode)
 	return s
-}
-
-// IncDec increments/decrements this note by the given amount of halfNotes and returns the new period
-func (n Note) IncDec(halfNotes int) int {
-	if n.Ins == nil || n.Ins.Periods == nil {
-		return n.Period
-	}
-	np, err := n.Ins.Periods.IncDec(n.Period, halfNotes)
-	if err != nil {
-		return n.Period
-	}
-	return np.period
 }
 
 // Details prints detailed info about the given note

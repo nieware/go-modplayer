@@ -58,7 +58,7 @@ type Channel struct {
 	note            *Note   // currently playing note
 	pos, step       float32 // the position inside the sample and the step with which to advance the position
 	firstTickOfNote bool    // is this the first tick where we play this note?
-	tickCnt         byte    // tick counter for note retrig/cut/delay
+	tickCnt         int     // tick counter for note retrig/cut/delay
 
 	PeriodProcessor // this channel's "PPU" (period/pitch processing unit)
 	VolumeProcessor // this channel's "VPU" (volume processing unit)
@@ -100,7 +100,7 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	}
 	// If we have an effect, set it on new or currently playing note
 	ch.PeriodFromNote(note, speed)
-	ch.SetPeriod(ch.period)
+	ch.SetPeriod(ch.GetPeriod())
 	ch.VolumeFromNote(note)
 
 	/*if ch.firstTickOfNote {
@@ -126,7 +126,7 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 func (ch *Channel) OnTick(curTick int) {
 	//if !ch.firstTickOfNote {
 	ch.PeriodOnTick(curTick)
-	ch.SetPeriod(ch.period)
+	ch.SetPeriod(ch.GetPeriod())
 	ch.VolumeOnTick(curTick)
 	//}
 	ch.firstTickOfNote = false
@@ -217,9 +217,9 @@ func (p *Player) GetNextSamples() (int, int) {
 			p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 			case SetSpeed:
 				if note.Par() <= 0x1F {
-					p.Tempo = int(note.Par())
+					p.Tempo = note.Par()
 				} else {
-					p.BPM = int(note.Par())
+					p.BPM = note.Par()
 				}
 			}
 		}

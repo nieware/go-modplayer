@@ -22,22 +22,22 @@ func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 	case VolSlide, PortamentoVolSlide, VibratoVolSlide:
 		if note.Par() != 0 {
 			if note.ParX() > 0 {
-				vpu.volumeΔ = int(note.ParX())
+				vpu.volumeΔ = note.ParX()
 			} else {
-				vpu.volumeΔ = -int(note.ParY())
+				vpu.volumeΔ = -note.ParY()
 			}
 		}
 		resetSlide = false
 	case Tremolo:
 		// TODO
 	case SetVol:
-		vpu.volume = int(note.Par())
+		vpu.volume = note.Par()
 	case SetTremoloWaveform:
 		vpu.EffectWaveform = DecodeEffectWaveform(note.ParY())
 	case FineVolSlideUp:
-		vpu.volume += int(note.ParY())
+		vpu.volume += note.ParY()
 	case FineVolSlideDown:
-		vpu.volume -= int(note.ParY())
+		vpu.volume -= note.ParY()
 	}
 
 	if resetSlide {
