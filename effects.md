@@ -1,6 +1,6 @@
 # Effects implementation status
 
-0 ✖ Normal play or Arpeggio             0xy : x-first halfnote add, y-second           PS VR (w. note assignment, applied 2/3 times per line)
+0 ✔️ Normal play or Arpeggio             0xy : x-first halfnote add, y-second           PS VR (w. note assignment, applied 2/3 times per line)
 1 ✔️ Slide Up                            1xx : upspeed                                  PS VR (applied once per tick)
 2 ✔️ Slide Down                          2xx : downspeed                                PS VR (applied once per tick)
 3 ✔️ Tone Portamento                     3xx : up/down speed                            PS VR (applied once per tick)
@@ -20,11 +20,11 @@ F ✔️ Set Speed                           Fxx : speed (00-1F) / tempo (20-FF)
 E0✖ Set Filter                          E0x : 0-filter on, 1-filter off                IGNORE
 E1✔️ FineSlide Up                        E1x : value                                    PS VR (halfnotes (?), applied once)
 E2✔️ FineSlide Down                      E2x : value                                    PS VR (halfnotes (?), applied once)
-E3✖ Glissando Control                   E3x : 0-off, 1-on (use with tonep.)            PF (->#3) 1 slide one halfnote at a time
-E4✖ Set Vibrato Waveform                E4x : 0-sine, 1-ramp down, 2-square            PF (->#4)
+E3✔️ Glissando Control                   E3x : 0-off, 1-on (use with tonep.)            PF (->#3) 1 slide one halfnote at a time
+E4✔️ Set Vibrato Waveform                E4x : 0-sine, 1-ramp down, 2-square            PF (->#4)
 E5✖ Set Loop (?)                        E5x : set loop point / set finetune?!          IS instrument setting
 E6✖ Jump to Loop (?)                    E6x : set/jump to loop, play x times           GL position (GLOBAL! applied once)
-E7✖ Set Tremolo Waveform                E7x : 0-sine, 1-ramp down. 2-square            VF (->#7)
+E7✔️ Set Tremolo Waveform                E7x : 0-sine, 1-ramp down. 2-square            VF (->#7)
 E8  NOT USED / Set Panning
 E9✔️ Retrig Note                         E9x : retrig from note + x vblanks             CH sample pos. (applied once every x ticks)
 EA✔️ Fine VolumeSlide Up                 EAx : add x to volume                          PR VS (applied once)
@@ -45,16 +45,17 @@ VS - volume set (incl. slide/tremolo)
 VR - volume reset (reset all volume effects)
 VF - volume flag (option affecting volume calculation)
 
+CH - affects channel (e.g. sample position/active)
+GL - global (play speed/position)
+
 ## Stats
 
-Implemented Base Effects: 10/14
-Implemented Ext. Effects: 07/13
+Implemented Base Effects: 11/14
+Implemented Ext. Effects: 10/13
 
 Pitch effects: 9 (7 pitch effects, 2 settings)
 Volume effects: 9 (8 volume effects, 1 settings)
 Position/timing commands: 10
-
-
 
 # Misc Notes
 

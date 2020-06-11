@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 type arpeggioEntry struct {
-	pΔ      int
+	period  int
 	maxTick int
 }
 
@@ -14,6 +14,7 @@ type PeriodProcessor struct {
 	periodΔ      int             // period delta (value to add/subtract for pitch slides)
 	arpeggio     []arpeggioEntry // periods for arpeggio
 	targetPeriod int             // target period for "slide to note"
+	glissando    bool            // glissando flag (true - "slide to note" slides in halfnotes)
 
 	EffectWaveform
 }
@@ -68,8 +69,10 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 		ppu.period -= int(note.ParY())
 	case FineSlideDown:
 		ppu.period += int(note.ParY())
-	//case GlissandoControl:
-	//case SetVibratoWaveform:
+	case GlissandoControl:
+		ppu.glissando = note.ParY() == 1
+	case SetVibratoWaveform:
+		ppu.EffectWaveform = DecodeEffectWaveform(note.ParY())
 	case PortamentoVolSlide:
 		resetSlide = false
 		// TODO: reset vibrato!
@@ -95,6 +98,18 @@ func (ppu *PeriodProcessor) PeriodOnTick(curTick int) {
 		}
 		ppu.period += ppu.periodΔ
 		fmt.Println("per", ppu.period)
+	}
+
+	if len(ppu.arpeggio) > 0 {
+		fmt.Println("cur", curTick)
+		for _, arp := range ppu.arpeggio {
+			if curTick > arp.maxTick {
+				continue
+			}
+			ppu.period = arp.period
+			fmt.Println("arp", ppu.period)
+			break
+		}
 	}
 }
 

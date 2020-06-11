@@ -33,13 +33,11 @@ func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 	case SetVol:
 		vpu.volume = int(note.Par())
 	case SetTremoloWaveform:
-		// TODO
+		vpu.EffectWaveform = DecodeEffectWaveform(note.ParY())
 	case FineVolSlideUp:
 		vpu.volume += int(note.ParY())
 	case FineVolSlideDown:
 		vpu.volume -= int(note.ParY())
-	case NoteCut:
-		// TODO
 	}
 
 	if resetSlide {

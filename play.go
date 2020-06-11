@@ -124,11 +124,11 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 
 // OnTick computes the necessary parameters for the given tick
 func (ch *Channel) OnTick(curTick int) {
-	if !ch.firstTickOfNote {
-		ch.PeriodOnTick(curTick)
-		ch.SetPeriod(ch.period)
-		ch.VolumeOnTick(curTick)
-	}
+	//if !ch.firstTickOfNote {
+	ch.PeriodOnTick(curTick)
+	ch.SetPeriod(ch.period)
+	ch.VolumeOnTick(curTick)
+	//}
 	ch.firstTickOfNote = false
 
 	ch.tickCnt--
@@ -227,13 +227,12 @@ func (p *Player) GetNextSamples() (int, int) {
 
 	p.curTiming++
 	if p.curTiming >= p.SPB {
-		p.curTiming = 0
-		p.curTick++
-
 		// some effects have to be reapplied with each tick
 		for i := range p.chans {
 			p.chans[i].OnTick(p.curTick)
 		}
+		p.curTiming = 0
+		p.curTick++
 	}
 	if p.curTick >= p.Tempo {
 		p.curTiming, p.curTick = 0, 0

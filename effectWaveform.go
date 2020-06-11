@@ -16,5 +16,22 @@ const (
 
 // EffectWaveform contains the parameters for a waveform assigned to an effect
 type EffectWaveform struct {
-	Type WaveformType
+	Type    WaveformType
+	CurType WaveformType
+	Retrig  bool
+}
+
+// DecodeEffectWaveform creates an EffectWaveform struct from a "set waveform" command parameter
+func DecodeEffectWaveform(par byte) (ew EffectWaveform) {
+	ew.Retrig = par >= 4
+	switch par {
+	case 0, 4:
+		ew.Type = Sine
+	case 1, 5:
+		ew.Type = RampDown
+	case 2, 6:
+		ew.Type = Square
+	case 3, 7:
+		ew.Type = Random
+	}
 }
