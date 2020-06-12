@@ -44,6 +44,10 @@ type Player struct {
 	Module
 
 	Position
+	loopPos Position // position to which to loop
+	loopIdx int      // current loop number
+	loopMax int      // total number of loops
+	doLoop  bool     // should a loop be executed after the current line?
 
 	Speed
 
@@ -202,6 +206,7 @@ func (p *Player) GetNextSamples() (int, int) {
 			notes = p.Module.Patterns[patt][p.curLine]
 		}
 
+		p.doLoop = false
 		for i := range p.chans {
 			note := p.Module.Patterns[patt][p.curLine][i]
 			if note.EffCode != 0 {
@@ -215,6 +220,18 @@ func (p *Player) GetNextSamples() (int, int) {
 			p.curPattern++
 			p.curTiming, p.curTick = 0, 0
 			p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
+			case PatternLoop:
+				if note.Par() == 0 {
+					p.loopPos = p.Position
+				} else {
+					if p.loopMax == 0 {
+						p.loopMax = note.ParY()
+					}
+					p.loopIdx++
+					if p.loopIdx <= p.loopMax {
+						p.doLoop = true
+					}
+				}
 			case SetSpeed:
 				if note.Par() <= 0x1F {
 					p.Tempo = note.Par()
@@ -236,7 +253,11 @@ func (p *Player) GetNextSamples() (int, int) {
 	}
 	if p.curTick >= p.Tempo {
 		p.curTiming, p.curTick = 0, 0
-		p.curLine++
+		if p.doLoop {
+			p.Position = p.loopPos
+		} else {
+			p.curLine++
+		}
 	}
 	if p.curLine >= 64 { // pattern len
 		p.curTiming, p.curTick, p.curLine = 0, 0, 0

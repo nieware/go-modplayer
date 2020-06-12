@@ -29,8 +29,8 @@ func _() {
 	_ = x[FineSlideDown-18]
 	_ = x[GlissandoControl-19]
 	_ = x[SetVibratoWaveform-20]
-	_ = x[SetLoop-21]
-	_ = x[JumpToLoop-22]
+	_ = x[SetFinetune-21]
+	_ = x[PatternLoop-22]
 	_ = x[SetTremoloWaveform-23]
 	_ = x[NotUsedE8-24]
 	_ = x[RetrigNote-25]
@@ -42,9 +42,9 @@ func _() {
 	_ = x[InvertLoop-31]
 }
 
-const _EffectType_name = "ArpeggioSlideUpSlideDownPortamentoVibratoPortamentoVolSlideVibratoVolSlideTremoloNotUsed8SetSampleOffsetVolSlidePositionJumpSetVolPatternBreakExtendedSetSpeedSetFilterFineSlideUpFineSlideDownGlissandoControlSetVibratoWaveformSetLoopJumpToLoopSetTremoloWaveformNotUsedE8RetrigNoteFineVolSlideUpFineVolSlideDownNoteCutNoteDelayPatternDelayInvertLoop"
+const _EffectType_name = "ArpeggioSlideUpSlideDownPortamentoVibratoPortamentoVolSlideVibratoVolSlideTremoloNotUsed8SetSampleOffsetVolSlidePositionJumpSetVolPatternBreakExtendedSetSpeedSetFilterFineSlideUpFineSlideDownGlissandoControlSetVibratoWaveformSetFinetunePatternLoopSetTremoloWaveformNotUsedE8RetrigNoteFineVolSlideUpFineVolSlideDownNoteCutNoteDelayPatternDelayInvertLoop"
 
-var _EffectType_index = [...]uint16{0, 8, 15, 24, 34, 41, 59, 74, 81, 89, 104, 112, 124, 130, 142, 150, 158, 167, 178, 191, 207, 225, 232, 242, 260, 269, 279, 293, 309, 316, 325, 337, 347}
+var _EffectType_index = [...]uint16{0, 8, 15, 24, 34, 41, 59, 74, 81, 89, 104, 112, 124, 130, 142, 150, 158, 167, 178, 191, 207, 225, 236, 247, 265, 274, 284, 298, 314, 321, 330, 342, 352}
 
 func (i EffectType) String() string {
 	if i < 0 || i >= EffectType(len(_EffectType_index)-1) {

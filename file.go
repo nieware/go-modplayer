@@ -54,10 +54,10 @@ const (
 	GlissandoControl
 	// SetVibratoWaveform E4x: 0-sine, 1-ramp down, 2-square
 	SetVibratoWaveform
-	// SetLoop E5x: set loop point
-	SetLoop
-	// JumpToLoop E6x: jump to loop, play x times
-	JumpToLoop
+	// SetFinetune E5x: set loop point
+	SetFinetune
+	// PatternLoop E6x: set loop / jump to loop, play x times
+	PatternLoop
 	// SetTremoloWaveform E7x: 0-sine, 1-ramp down. 2-square
 	SetTremoloWaveform
 	// NotUsedE8 unused extended command
