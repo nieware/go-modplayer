@@ -18,7 +18,7 @@ import (
 var ctx *oto.Context
 
 const (
-	sampleRate      = 48000
+	sampleRate      = 24000 // > 30000 produces artifacts under Windows?!
 	channelNum      = 2
 	bitDepthInBytes = 2
 	bufferSize      = 4096
@@ -44,10 +44,11 @@ type Player struct {
 	Module
 
 	Position
-	loopPos Position // position to which to loop
-	loopIdx int      // current loop number
-	loopMax int      // total number of loops
-	doLoop  bool     // should a loop be executed after the current line?
+	loopPos    Position // position to which to loop
+	loopIdx    int      // current loop number
+	loopMax    int      // total number of loops
+	doLoop     bool     // should a loop be executed after the current line?
+	delayLines int      // delay playing by x lines
 
 	Speed
 
@@ -57,12 +58,12 @@ type Player struct {
 
 // Channel is an individual channel of a Player
 type Channel struct {
-	index           int     // the number of this channel
-	active          bool    // is the channel currently playing something? Set to false if the sample has "played out"
-	note            *Note   // currently playing note
-	pos, step       float32 // the position inside the sample and the step with which to advance the position
-	firstTickOfNote bool    // is this the first tick where we play this note?
-	tickCnt         int     // tick counter for note retrig/cut/delay
+	index     int     // the number of this channel
+	active    bool    // is the channel currently playing something? Set to false if the sample has "played out"
+	note      *Note   // currently playing note
+	pos, step float32 // the position inside the sample and the step with which to advance the position
+	//firstTickOfNote bool    // is this the first tick where we play this note?
+	tickCnt int // tick counter for note retrig/cut/delay
 
 	PeriodProcessor // this channel's "PPU" (period/pitch processing unit)
 	VolumeProcessor // this channel's "VPU" (volume processing unit)
@@ -98,7 +99,7 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		// if we have an instrument, start playing a new note
 		ch.note = &note
-		ch.firstTickOfNote = true
+		//ch.firstTickOfNote = true
 		ch.active = true
 		ch.pos = 0
 	}
@@ -114,10 +115,14 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	switch note.EffType {
 	case SetSampleOffset:
 		if ch.active {
-			ch.pos = float32(int(note.Effect.Par()) << 9)
+			ch.pos = float32(int(note.Par()) << 9)
+		}
+	case SetFinetune:
+		if note.Ins != nil {
+			note.Ins.SetFinetune(note.ParY())
 		}
 	case RetrigNote, NoteCut, NoteDelay:
-		ch.tickCnt = note.Effect.ParY()
+		ch.tickCnt = note.ParY()
 		ch.active = note.EffType != NoteDelay
 	}
 
@@ -133,7 +138,7 @@ func (ch *Channel) OnTick(curTick int) {
 	ch.SetPeriod(ch.GetPeriod())
 	ch.VolumeOnTick(curTick)
 	//}
-	ch.firstTickOfNote = false
+	//ch.firstTickOfNote = false
 
 	ch.tickCnt--
 	if ch.note == nil || ch.note.Ins == nil {
@@ -143,7 +148,7 @@ func (ch *Channel) OnTick(curTick int) {
 	case RetrigNote:
 		if ch.tickCnt == 0 {
 			ch.pos = 1
-			ch.tickCnt = ch.note.Effect.ParY()
+			ch.tickCnt = ch.note.ParY()
 		}
 	case NoteCut:
 		if ch.tickCnt == 0 {
@@ -192,12 +197,12 @@ func (ch *Channel) GetNextSample() int {
 // played (for left and right stereo channel).
 func (p *Player) GetNextSamples() (int, int) {
 	// if we are at the start of a new line, init the notes and effects
-	if p.curTick == 0 && p.curTiming == 0 {
+	if p.curTick == 0 && p.curTiming == 0 && p.delayLines == 0 {
 		patt := p.Module.PatternTable[p.curPattern]
 		notes := p.Module.Patterns[patt][p.curLine]
 		fmt.Println(notes[0], notes[1], notes[2], notes[3])
 
-		// process "pattern break" before playing the notes
+		// FIXME: this processes "pattern break" before playing the notes, but it should be done AFTER the current line!
 		pars, isPatternBreak := findEffect(notes, PatternBreak)
 		if isPatternBreak {
 			p.curPattern++
@@ -216,10 +221,19 @@ func (p *Player) GetNextSamples() (int, int) {
 
 			switch note.EffType {
 			// we only take care of global position/timing commands here, the rest are handled by the channel or its PPU/VPU
-			/*case PatternBreak:
-			p.curPattern++
-			p.curTiming, p.curTick = 0, 0
-			p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
+			/*case PositionJump: // FIXME should be done after current line
+				songPos := note.Par()
+				if songPos >= 128 {
+					break
+				}
+				if songPos >= len(p.Module.PatternTable) {
+					songPos = 0
+				}
+				p.curPattern =
+			case PatternBreak:
+				p.curPattern++
+				p.curTiming, p.curTick = 0, 0
+				p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
 			case PatternLoop:
 				if note.Par() == 0 {
 					p.loopPos = p.Position
@@ -232,6 +246,8 @@ func (p *Player) GetNextSamples() (int, int) {
 						p.doLoop = true
 					}
 				}
+			case PatternDelay:
+				p.delayLines = note.Par()
 			case SetSpeed:
 				if note.Par() <= 0x1F {
 					p.Tempo = note.Par()
@@ -255,6 +271,8 @@ func (p *Player) GetNextSamples() (int, int) {
 		p.curTiming, p.curTick = 0, 0
 		if p.doLoop {
 			p.Position = p.loopPos
+		} else if p.delayLines > 0 {
+			p.delayLines--
 		} else {
 			p.curLine++
 		}

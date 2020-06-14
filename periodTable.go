@@ -52,8 +52,8 @@ func NewPeriodTable(fineTune int) PeriodTable {
 	return ret
 }
 
-// Find tries to find a period value in the NotePeriod table and returns the index
-func (pt *PeriodTable) Find(period int) (NotePeriod, int, error) {
+// FindPeriod tries to find a period value in the NotePeriod table and returns the index
+func (pt *PeriodTable) FindPeriod(period int) (NotePeriod, int, error) {
 	for ni, np := range *pt {
 		if np.period == period {
 			return np, ni, nil
@@ -62,9 +62,9 @@ func (pt *PeriodTable) Find(period int) (NotePeriod, int, error) {
 	return NotePeriod{}, 0, fmt.Errorf("Note period %d not found", period)
 }
 
-// IncDec increments/decrements a given period by the given delta value (expressed in half-notes)
-func (pt *PeriodTable) IncDec(period, delta int) (NotePeriod, error) {
-	_, idx, err := pt.Find(period)
+// IncDecPeriod increments/decrements a given period by the given delta value (expressed in half-notes)
+func (pt *PeriodTable) IncDecPeriod(period, delta int) (NotePeriod, error) {
+	_, idx, err := pt.FindPeriod(period)
 	if err != nil {
 		return NotePeriod{}, err
 	}

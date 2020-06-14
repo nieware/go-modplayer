@@ -91,12 +91,12 @@ func (e Effect) Par() int {
 	return int(e.EffCode & 0xFF)
 }
 
-// ParX returns the first nibble of the parameter byte
+// ParX returns the first nibble of the parameter byte (only for "primary" commands/effects)
 func (e Effect) ParX() int {
 	return int(e.EffCode & 0xF0 >> 4)
 }
 
-// ParY returns the second nibble of the parameter byte
+// ParY returns the second nibble of the parameter byte (this is the only parameter for the "extended" commands/effects)
 func (e Effect) ParY() int {
 	return int(e.EffCode & 0x0F)
 }
@@ -115,25 +115,59 @@ type Instrument struct {
 	Num      int
 	Name     string
 	Len      int
-	Finetune int
 	Volume   int
 	RepStart int
 	RepLen   int
 	Offset   int
-	Periods  *PeriodTable
 	Sample   []int8
+
+	finetune int
+	*PeriodTable
 }
 
 // IncDec increments/decrements the given period by the given amount of halfNotes and returns the new period
-func (i Instrument) IncDec(period, halfNotes int) int {
-	if i.Periods == nil {
+func (i *Instrument) IncDec(period, halfNotes int) int {
+	if i.PeriodTable == nil {
 		return period
 	}
-	np, err := i.Periods.IncDec(period, halfNotes)
+	np, err := i.IncDecPeriod(period, halfNotes)
 	if err != nil {
 		return period
 	}
 	return np.period
+}
+
+// Finetune gets the current finetune value for this instrumen
+func (i *Instrument) Finetune() int {
+	return i.finetune
+}
+
+// SetFinetune sets the finetune value and the period table
+func (i *Instrument) SetFinetune(f int) {
+	i.finetune = f & 0x0F
+	i.PeriodTable = &PeriodTables[i.finetune]
+}
+
+// ReadInstrument constructs an instrument from the given instrData slice
+func ReadInstrument(instrData []byte) (ins Instrument, err error) {
+	ins.Name = strings.Trim(string(instrData[0:22]), " \t\n\v\f\r\x00")
+
+	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
+
+	// FIXME this is actually a signed nibble, but we are currently treating it as unsigned (0..15)
+	ins.SetFinetune(int(instrData[24] & 0x0F))
+
+	ins.Volume = int(instrData[25])
+
+	ins.RepStart = int(instrData[26])<<9 | int(instrData[27])<<1
+	if instrData[29] > 1 {
+		ins.RepLen = int(instrData[28])<<9 | int(instrData[29])<<1
+	}
+	if ins.Len == 0 {
+		return
+	}
+
+	return
 }
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
@@ -144,10 +178,59 @@ type Note struct {
 	Effect
 }
 
+func (n Note) String() string {
+	s := ""
+	if n.Period == 0 {
+		if n.InsNum == 0 && n.EffCode == 0 {
+			return "---i--e---"
+		}
+		s += "---"
+	} else {
+		np, _, err := n.Ins.FindPeriod(n.Period)
+		if err == nil {
+			s += np.String()
+		} else {
+			s += fmt.Sprintf("%03d", n.Period)
+		}
+	}
+	s += fmt.Sprintf("i%02xe%03x", n.InsNum, n.EffCode)
+	return s
+}
+
+// Details prints detailed info about the given note
+func (n Note) Details() {
+	fmt.Println("Ins", n.InsNum)
+	fmt.Println("Period", n.Period)
+	fmt.Println("Effect", n.Effect)
+}
+
+// ReadNote constructs a Note from the given noteData slice
+func ReadNote(noteData []byte, mod *Module) (n Note) {
+	n.InsNum = int(noteData[0]&0xF0 | (noteData[2]&0xF0)>>4)
+	if len(mod.Instruments) > n.InsNum {
+		n.Ins = &mod.Instruments[n.InsNum]
+	}
+
+	bsl := []byte{noteData[0] & 0x0F, noteData[1]}
+	n.Period = (int)(binary.BigEndian.Uint16(bsl))
+
+	effNum := noteData[2] & 0x0F
+	effPar := noteData[3]
+	n.EffCode = uint16(effNum)<<8 | uint16(effPar)
+	if effNum != 0xE {
+		n.EffType = EffectType(effNum)
+	} else {
+		effSubNum := (noteData[3] & 0xF0) >> 4
+		n.EffType = EffectType(16 + effSubNum)
+	}
+
+	return
+}
+
 // Pattern is a 2-dimensional slice of Notes (lines x channels)
 type Pattern [][]Note
 
-// Module stores a complete MOD file
+// Module contains the data for a MOD file
 type Module struct {
 	FileName      string
 	Name          string
@@ -172,7 +255,7 @@ func (m Module) Info() {
 			continue
 		}
 		fmt.Printf("    %d %s : Offs %x, Len %x, RepS %x, RepL %x; Finetune %d, Vol %d\n",
-			idx, ins.Name, ins.Offset, ins.Len, ins.RepStart, ins.RepLen, ins.Finetune, ins.Volume)
+			idx, ins.Name, ins.Offset, ins.Len, ins.RepStart, ins.RepLen, ins.Finetune(), ins.Volume)
 	}
 
 	EffStats := make([]int, 32)
@@ -302,75 +385,3 @@ func ReadModFile(fn string) (mod Module, err error) {
           length, etc.
 2         Length of sample repeat in words. Only loop if greater than 1.
 */
-
-// ReadInstrument constructs an instrument from the given instrData slice
-func ReadInstrument(instrData []byte) (ins Instrument, err error) {
-	ins.Name = strings.Trim(string(instrData[0:22]), " \t\n\v\f\r\x00")
-
-	ins.Len = int(instrData[22])<<9 | int(instrData[23])<<1
-
-	// FIXME this is actually a signed nibble, but we are currently treating it as unsigned (0..15)
-	ins.Finetune = int(instrData[24] & 0x0F)
-	ins.Periods = &PeriodTables[ins.Finetune]
-
-	ins.Volume = int(instrData[25])
-
-	ins.RepStart = int(instrData[26])<<9 | int(instrData[27])<<1
-	if instrData[29] > 1 {
-		ins.RepLen = int(instrData[28])<<9 | int(instrData[29])<<1
-	}
-	if ins.Len == 0 {
-		return
-	}
-
-	return
-}
-
-func (n Note) String() string {
-	s := ""
-	if n.Period == 0 {
-		if n.InsNum == 0 && n.EffCode == 0 {
-			return "---i--e---"
-		}
-		s += "---"
-	} else {
-		np, _, err := n.Ins.Periods.Find(n.Period)
-		if err == nil {
-			s += np.String()
-		} else {
-			s += fmt.Sprintf("%03d", n.Period)
-		}
-	}
-	s += fmt.Sprintf("i%02xe%03x", n.InsNum, n.EffCode)
-	return s
-}
-
-// Details prints detailed info about the given note
-func (n Note) Details() {
-	fmt.Println("Ins", n.InsNum)
-	fmt.Println("Period", n.Period)
-	fmt.Println("Effect", n.Effect)
-}
-
-// ReadNote constructs a Note from the given noteData slice
-func ReadNote(noteData []byte, mod *Module) (n Note) {
-	n.InsNum = int(noteData[0]&0xF0 | (noteData[2]&0xF0)>>4)
-	if len(mod.Instruments) > n.InsNum {
-		n.Ins = &mod.Instruments[n.InsNum]
-	}
-
-	bsl := []byte{noteData[0] & 0x0F, noteData[1]}
-	n.Period = (int)(binary.BigEndian.Uint16(bsl))
-
-	effNum := noteData[2] & 0x0F
-	effPar := noteData[3]
-	n.EffCode = uint16(effNum)<<8 | uint16(effPar)
-	if effNum != 0xE {
-		n.EffType = EffectType(effNum)
-	} else {
-		effSubNum := (noteData[3] & 0xF0) >> 4
-		n.EffType = EffectType(16 + effSubNum)
-	}
-
-	return
-}
