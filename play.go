@@ -44,11 +44,11 @@ type Player struct {
 	Module
 
 	Position
-	loopPos    Position // position to which to loop
-	loopIdx    int      // current loop number
-	loopMax    int      // total number of loops
-	doLoop     bool     // should a loop be executed after the current line?
-	delayLines int      // delay playing by x lines
+	loopPos    *Position // position to which to loop
+	jumpPos    *Position // position to which to jump
+	loopIdx    int       // current loop number
+	loopMax    int       // total number of loops
+	delayLines int       // delay playing by x lines
 
 	Speed
 
@@ -202,16 +202,7 @@ func (p *Player) GetNextSamples() (int, int) {
 		notes := p.Module.Patterns[patt][p.curLine]
 		fmt.Println(notes[0], notes[1], notes[2], notes[3])
 
-		// FIXME: this processes "pattern break" before playing the notes, but it should be done AFTER the current line!
-		pars, isPatternBreak := findEffect(notes, PatternBreak)
-		if isPatternBreak {
-			p.curPattern++
-			p.curLine = int(pars)
-			patt = p.Module.PatternTable[p.curPattern]
-			notes = p.Module.Patterns[patt][p.curLine]
-		}
-
-		p.doLoop = false
+		p.jumpPos = nil
 		for i := range p.chans {
 			note := p.Module.Patterns[patt][p.curLine][i]
 			if note.EffCode != 0 {
@@ -221,29 +212,29 @@ func (p *Player) GetNextSamples() (int, int) {
 
 			switch note.EffType {
 			// we only take care of global position/timing commands here, the rest are handled by the channel or its PPU/VPU
-			/*case PositionJump: // FIXME should be done after current line
-				songPos := note.Par()
+			case PositionJump, PatternBreak:
+				songPos, newLine := note.Par(), 0
+				if note.EffType == PatternBreak {
+					songPos, newLine = p.curPattern+1, note.ParX()*10+note.ParY() // BCD
+				}
 				if songPos >= 128 {
 					break
 				}
 				if songPos >= len(p.Module.PatternTable) {
 					songPos = 0
 				}
-				p.curPattern =
-			case PatternBreak:
-				p.curPattern++
-				p.curTiming, p.curTick = 0, 0
-				p.curLine = int(note.Pars) // fixme: apparently Par is "decimal" (BCD?)*/
+				p.jumpPos = &Position{curPattern: songPos, curLine: newLine}
 			case PatternLoop:
 				if note.Par() == 0 {
-					p.loopPos = p.Position
+					p.loopPos = &p.Position
 				} else {
 					if p.loopMax == 0 {
-						p.loopMax = note.ParY()
+						p.loopIdx, p.loopMax = 0, note.ParY()
 					}
 					p.loopIdx++
-					if p.loopIdx <= p.loopMax {
-						p.doLoop = true
+					if p.loopIdx > p.loopMax {
+						p.loopPos = nil
+						p.loopIdx, p.loopMax = 0, 0
 					}
 				}
 			case PatternDelay:
@@ -268,12 +259,16 @@ func (p *Player) GetNextSamples() (int, int) {
 		p.curTick++
 	}
 	if p.curTick >= p.Tempo {
+		// end of line - here we have to do one of several things depending on whether we have...
 		p.curTiming, p.curTick = 0, 0
-		if p.doLoop {
-			p.Position = p.loopPos
-		} else if p.delayLines > 0 {
+		switch {
+		case p.loopPos != nil: // (1) a loop...
+			p.Position = *(p.loopPos)
+		case p.jumpPos != nil: // (2) a jump...
+			p.Position = *(p.jumpPos)
+		case p.delayLines > 0: // (3) a delay...
 			p.delayLines--
-		} else {
+		default: // or (4) none of the above
 			p.curLine++
 		}
 	}

@@ -11,9 +11,9 @@
 8   NOT USED
 9 ✔️ Set SampleOffset                    9xx : offset (23 -> 2300)                      CH sample pos. (applied once)
 A ✔️ VolumeSlide                         Axy : x-upspeed, y-downspeed                   PR VS (applied once per tick)
-B ✖ Position Jump                       Bxx : songposition                             GL position (GLOBAL! applied once)
+B ✔️?Position Jump                       Bxx : songposition                             GL position (GLOBAL! applied once)
 C ✔️ Set Volume                          Cxx : volume, 00-40                            PR VS (applied once)
-D ✔️ Pattern Break (FIXME)               Dxx : break position in next patt              GL position (GLOBAL! applied once)
+D ✔️?Pattern Break                       Dxx : break position in next patt              GL position (GLOBAL! applied once)
 E   E-Commands                          Exy : see below...
 F ✔️ Set Speed                           Fxx : speed (00-1F) / tempo (20-FF)            GL speed (GLOBAL! applied once)
 ----------------------------------------------------------------------------
