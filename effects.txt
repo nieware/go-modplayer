@@ -1,4 +1,5 @@
-# Effects implementation status
+Effects implementation status
+-----------------------------
 
 0 ✔️ Normal play or Arpeggio             0xy : x-first halfnote add, y-second           PS VR (w. note assignment, applied 2/3 times per line)
 1 ✔️ Slide Up                            1xx : upspeed                                  PS VR (applied once per tick)
@@ -34,7 +35,8 @@ ED✔️?NoteDelay                           EDx : delay note x vblanks         
 EE✔️?PatternDelay                        EEx : delay pattern x notes                    GL delay (applied once after x ticks) -> "additional lines" counter
 EF✖ Invert Loop                         EFx : speed                                    IGNORE ???
 
-## Key
+Key
+---
 
 PS - pitch set (incl. slide/vibrato)
 PK - pitch keep (only specified effect, i.e. portamento or vibrato)
@@ -48,7 +50,8 @@ VF - volume flag (option affecting volume calculation)
 CH - affects channel (e.g. sample position/active)
 GL - global (play speed/position)
 
-## Stats
+Stats
+-----
 
 Implemented Base Effects: 11/14; Tested: ??/14
 Implemented Ext. Effects: 13/13; Tested: 00/13
@@ -57,7 +60,8 @@ Pitch effects: 9 (7 pitch effects, 2 settings)
 Volume effects: 9 (8 volume effects, 1 settings)
 Position/timing commands: 10
 
-# Misc Notes
+Misc Notes
+----------
 
 "If you need to implement volume artificially, just multiply by the volume and shift right 6 times." 
 (TODO: multiply by volume and use 16 bit, saves right-shifting)
