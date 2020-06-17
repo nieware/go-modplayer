@@ -45,6 +45,7 @@ type Player struct {
 
 	Position
 	loopPos    *Position // position to which to loop
+	doLoop     bool      // set to true when we should jump to loopPos
 	jumpPos    *Position // position to which to jump
 	loopIdx    int       // current loop number
 	loopMax    int       // total number of loops
@@ -203,6 +204,7 @@ func (p *Player) GetNextSamples() (int, int) {
 		fmt.Println(notes[0], notes[1], notes[2], notes[3])
 
 		p.jumpPos = nil
+		p.doLoop = false
 		for i := range p.chans {
 			note := p.Module.Patterns[patt][p.curLine][i]
 			if note.EffCode != 0 {
@@ -232,6 +234,7 @@ func (p *Player) GetNextSamples() (int, int) {
 						p.loopIdx, p.loopMax = 0, note.ParY()
 					}
 					p.loopIdx++
+					p.doLoop = true
 					if p.loopIdx > p.loopMax {
 						p.loopPos = nil
 						p.loopIdx, p.loopMax = 0, 0
@@ -262,7 +265,7 @@ func (p *Player) GetNextSamples() (int, int) {
 		// end of line - here we have to do one of several things depending on whether we have...
 		p.curTiming, p.curTick = 0, 0
 		switch {
-		case p.loopPos != nil: // (1) a loop...
+		case p.doLoop: // (1) a loop...
 			p.Position = *(p.loopPos)
 		case p.jumpPos != nil: // (2) a jump...
 			p.Position = *(p.jumpPos)
