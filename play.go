@@ -28,7 +28,7 @@ const (
 type Speed struct {
 	Tempo int // play speed part 1: number of ticks per pattern line (default 6)
 	BPM   int // play speed part 2: so-called "beats per minute", but actually freq = curBPM * 0,4 Hz (default 125)
-	SPB   int // samples per tick (depends on the sample rate we are playing at)
+	SPT   int // samples per tick (depends on the sample rate we are playing at)
 }
 
 // Position holds all the parameters which determine the current play position in a MOD file
@@ -79,11 +79,13 @@ func NewPlayer(mod Module) *Player {
 	p.Speed = Speed{
 		Tempo: 6,
 		BPM:   125,
-		SPB:   int(float64(sampleRate) / (.4 * 125)),
+		SPT:   int(float64(sampleRate) / (.4 * 125)),
 	}
 
 	for i := range p.chans {
 		p.chans[i].index = i
+		p.chans[i].PeriodProcessor.EffectWaveform = DecodeEffectWaveform(0)
+		p.chans[i].VolumeProcessor.EffectWaveform = DecodeEffectWaveform(0)
 	}
 	return p
 }
@@ -108,6 +110,8 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	ch.PeriodFromNote(note, speed)
 	ch.SetPeriod(ch.GetPeriod())
 	ch.VolumeFromNote(note)
+
+	ch.VolumeProcessor.InitTremoloWaveform(12, 10, speed.SPT)
 
 	/*if ch.firstTickOfNote {
 		fmt.Printf("ch %d -> active, step %f\n", ch.index, ch.step)
@@ -134,6 +138,10 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 
 // OnTick computes the necessary parameters for the given tick
 func (ch *Channel) OnTick(curTick int) {
+	/*if ch.index == 0 {
+		fmt.Printf("\n\ntick %d\n", curTick)
+	}//*/
+
 	//if !ch.firstTickOfNote {
 	ch.PeriodOnTick(curTick)
 	ch.SetPeriod(ch.GetPeriod())
@@ -167,6 +175,11 @@ func (ch *Channel) OnTick(curTick int) {
 // GetNextSample advances the internal counter and returns the value for the next sample to be
 // played on this channel.
 func (ch *Channel) GetNextSample() int {
+	/*if ch.index == 0 {
+		tremolo := ch.VolumeProcessor.DoStep()
+		fmt.Printf("%d ", tremolo)
+	}//*/
+
 	if !ch.active {
 		return 0
 	}
@@ -253,7 +266,7 @@ func (p *Player) GetNextSamples() (int, int) {
 	}
 
 	p.curTiming++
-	if p.curTiming >= p.SPB {
+	if p.curTiming >= p.SPT {
 		// some effects have to be reapplied with each tick
 		for i := range p.chans {
 			p.chans[i].OnTick(p.curTick)
