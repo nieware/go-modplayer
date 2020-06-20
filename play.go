@@ -84,8 +84,8 @@ func NewPlayer(mod Module) *Player {
 
 	for i := range p.chans {
 		p.chans[i].index = i
-		p.chans[i].PeriodProcessor.EffectWaveform = DecodeEffectWaveform(0)
-		p.chans[i].VolumeProcessor.EffectWaveform = DecodeEffectWaveform(0)
+		p.chans[i].PeriodProcessor.EffectWaveform = NewEffectWaveform(p.SPT)
+		p.chans[i].VolumeProcessor.EffectWaveform = NewEffectWaveform(p.SPT)
 	}
 	return p
 }
@@ -110,8 +110,6 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	ch.PeriodFromNote(note, speed)
 	ch.SetPeriod(ch.GetPeriod())
 	ch.VolumeFromNote(note)
-
-	ch.VolumeProcessor.InitTremoloWaveform(12, 10, speed.SPT)
 
 	/*if ch.firstTickOfNote {
 		fmt.Printf("ch %d -> active, step %f\n", ch.index, ch.step)

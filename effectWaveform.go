@@ -57,6 +57,8 @@ const (
 
 // EffectWaveform contains the parameters for a waveform assigned to an effect
 type EffectWaveform struct {
+	SamplesPerTick int
+
 	Type   WaveformType
 	Retrig bool
 
@@ -81,19 +83,32 @@ func (ew *EffectWaveform) DoStep() int {
 	return 0
 }
 
-// InitTremoloWaveform initializes a waveform for a tremolo (volume) effect
-func (ew *EffectWaveform) InitTremoloWaveform(X, Y, SamplesPerTick int) {
-	ew.CurType = ew.Type
-	if ew.Type == Random {
-		ew.CurType = Sine // TODO: really set type randomly!
+func (ew *EffectWaveform) initWaveform(X, amplitude int) {
+	if ew.Retrig {
+		ew.Pos = 0
 	}
-	ew.Step = (math.Pi * float64(X)) / (32.0 * float64(SamplesPerTick))
-	ew.Amplitude = float64(Y)
+	if X > 0 && amplitude > 0 {
+		ew.CurType = ew.Type
+		if ew.Type == Random {
+			ew.CurType = Sine // TODO: really set type randomly!
+		}
+		ew.Step = (math.Pi * float64(X)) / (32.0 * float64(ew.SamplesPerTick))
+		ew.Amplitude = float64(amplitude)
+	}
 }
 
-// DecodeEffectWaveform creates an EffectWaveform struct from a "set waveform" command parameter
-// FIXME: when we call this on "set waveform", the stored Step and Amplitude are lost - problem?
-func DecodeEffectWaveform(par int) (ew EffectWaveform) {
+// InitTremoloWaveform (re)initializes a waveform for a tremolo (volume) effect at the beginning of a new note
+func (ew *EffectWaveform) InitTremoloWaveform(X, Y int) {
+	ew.initWaveform(X, Y)
+}
+
+// InitVibratoWaveform initializes a waveform for a vibrato (pitch) effect
+func (ew *EffectWaveform) InitVibratoWaveform(X, Y, period int, ins Instrument) {
+	ew.initWaveform(X, ins.GetPeriodDelta(period, Y))
+}
+
+// DecodeWaveformType sets the type of an EffectWaveform from a "set waveform" command parameter par
+func (ew *EffectWaveform) DecodeWaveformType(par int) {
 	ew.Retrig = par < 4
 	switch par {
 	case 0, 4:
@@ -105,5 +120,11 @@ func DecodeEffectWaveform(par int) (ew EffectWaveform) {
 	case 3, 7:
 		ew.Type = Random
 	}
+}
+
+// NewEffectWaveform creates a new EffectWaveform
+func NewEffectWaveform(SamplesPerTick int) (ew EffectWaveform) {
+	ew.SamplesPerTick = SamplesPerTick
+	ew.DecodeWaveformType(0)
 	return
 }

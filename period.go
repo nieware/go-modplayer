@@ -53,7 +53,7 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 		}
 		resetSlide = false
 	case Vibrato, VibratoVolSlide:
-		// TODO
+		ppu.InitVibratoWaveform(note.ParX(), note.ParY(), note.Period, *note.Ins)
 	case FineSlideUp:
 		ppu.period -= note.ParY()
 	case FineSlideDown:
@@ -61,7 +61,7 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 	case GlissandoControl:
 		ppu.glissando = note.ParY() == 1
 	case SetVibratoWaveform:
-		ppu.EffectWaveform = DecodeEffectWaveform(note.ParY())
+		ppu.DecodeWaveformType(note.ParY())
 	case PortamentoVolSlide:
 		resetSlide = false
 		// TODO: reset vibrato!

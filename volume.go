@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 // VolumeProcessor is responsible for calculating the current volume for a channel
 // considering currently active effect(s)
 type VolumeProcessor struct {
@@ -29,11 +27,11 @@ func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 		}
 		resetSlide = false
 	case Tremolo:
-		// TODO
+		vpu.InitTremoloWaveform(note.ParX(), note.ParY())
 	case SetVol:
 		vpu.volume = note.Par()
 	case SetTremoloWaveform:
-		vpu.EffectWaveform = DecodeEffectWaveform(note.ParY())
+		vpu.DecodeWaveformType(note.ParY())
 	case FineVolSlideUp:
 		vpu.volume += note.ParY()
 	case FineVolSlideDown:
@@ -56,7 +54,7 @@ func (vpu *VolumeProcessor) VolumeOnTick(curTick int) {
 		if vpu.volume < 0 {
 			vpu.volume = 0
 		}
-		fmt.Println("vol", vpu.volume)
+		//fmt.Println("vol", vpu.volume)
 	}
 
 }

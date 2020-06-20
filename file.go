@@ -110,6 +110,8 @@ func findEffect(notes []Note, eff EffectType) (int, bool) {
 	return 0, false
 }
 
+// ############################################################################
+
 // Instrument represents an instrument used in a MOD file, including the sample data
 type Instrument struct {
 	Num      int
@@ -127,7 +129,7 @@ type Instrument struct {
 
 // IncDec increments/decrements the given period by the given amount of halfNotes and returns the new period
 func (i *Instrument) IncDec(period, halfNotes int) int {
-	if i.PeriodTable == nil {
+	if halfNotes == 0 || i.PeriodTable == nil {
 		return period
 	}
 	np, err := i.IncDecPeriod(period, halfNotes)
@@ -135,6 +137,18 @@ func (i *Instrument) IncDec(period, halfNotes int) int {
 		return period
 	}
 	return np.period
+}
+
+// GetPeriodDelta gets the difference between the given period to reach the given amount of halfNotes
+func (i *Instrument) GetPeriodDelta(period, halfNotes int) int {
+	if halfNotes == 0 || i.PeriodTable == nil {
+		return 0
+	}
+	np, err := i.IncDecPeriod(period, halfNotes)
+	if err != nil {
+		return 0
+	}
+	return intAbs(np.period - period)
 }
 
 // Finetune gets the current finetune value for this instrumen
@@ -169,6 +183,8 @@ func ReadInstrument(instrData []byte) (ins Instrument, err error) {
 
 	return
 }
+
+// ############################################################################
 
 // Note is an individual note, containing an Instrument, a Period and an Effect (with parameters)
 type Note struct {
@@ -228,7 +244,9 @@ func ReadNote(noteData []byte, mod *Module) (n Note) {
 }
 
 // Pattern is a 2-dimensional slice of Notes (lines x channels)
-type Pattern [][]Note
+//type Pattern [][]Note FIXME not used - use or remove!
+
+// ############################################################################
 
 // Module contains the data for a MOD file
 type Module struct {
