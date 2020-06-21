@@ -59,6 +59,8 @@ const (
 type EffectWaveform struct {
 	SamplesPerTick int
 
+	Active bool
+
 	Type   WaveformType
 	Retrig bool
 
@@ -70,6 +72,9 @@ type EffectWaveform struct {
 
 // DoStep gets the next value for our waveform
 func (ew *EffectWaveform) DoStep() int {
+	if !ew.Active {
+		return 0
+	}
 	ew.Pos += ew.Step
 	switch ew.CurType {
 	case Sine:
@@ -84,6 +89,7 @@ func (ew *EffectWaveform) DoStep() int {
 }
 
 func (ew *EffectWaveform) initWaveform(X, amplitude int) {
+	ew.Active = true
 	if ew.Retrig {
 		ew.Pos = 0
 	}

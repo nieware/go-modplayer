@@ -12,6 +12,7 @@ type VolumeProcessor struct {
 // VolumeFromNote initializes the volume effects for the given note
 func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 	resetSlide := true
+	resetTremolo := true
 	if note.Ins != nil && note.Ins.Sample != nil && note.Period > 0 {
 		vpu.volume = note.Ins.Volume
 	}
@@ -28,6 +29,7 @@ func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 		resetSlide = false
 	case Tremolo:
 		vpu.InitTremoloWaveform(note.ParX(), note.ParY())
+		resetTremolo = false
 	case SetVol:
 		vpu.volume = note.Par()
 	case SetTremoloWaveform:
@@ -41,10 +43,12 @@ func (vpu *VolumeProcessor) VolumeFromNote(note Note) {
 	if resetSlide {
 		vpu.volumeΔ = 0
 	}
-
+	if resetTremolo {
+		vpu.EffectWaveform.Active = false
+	}
 }
 
-// VolumeOnTick computes the period value for the given tick
+// VolumeOnTick computes the volume value for the given tick
 func (vpu *VolumeProcessor) VolumeOnTick(curTick int) {
 	if vpu.volumeΔ != 0 {
 		vpu.volume += vpu.volumeΔ // FIXME: not sure if this is correct, seems to be too fast!
@@ -56,5 +60,9 @@ func (vpu *VolumeProcessor) VolumeOnTick(curTick int) {
 		}
 		//fmt.Println("vol", vpu.volume)
 	}
+}
 
+// Next gets the volume value for the next sample
+func (vpu *VolumeProcessor) Next() int {
+	return vpu.volume + vpu.DoStep()
 }

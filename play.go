@@ -44,12 +44,12 @@ type Player struct {
 	Module
 
 	Position
-	loopPos    *Position // position to which to loop
-	doLoop     bool      // set to true when we should jump to loopPos
+	delayLines int       // delay playing by x lines
 	jumpPos    *Position // position to which to jump
+	doLoop     bool      // set to true when we should jump to loopPos
+	loopPos    *Position // position to which to loop
 	loopIdx    int       // current loop number
 	loopMax    int       // total number of loops
-	delayLines int       // delay playing by x lines
 
 	Speed
 
@@ -108,7 +108,7 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 	}
 	// If we have an effect, set it on new or currently playing note
 	ch.PeriodFromNote(note, speed)
-	ch.SetPeriod(ch.GetPeriod())
+	//ch.SetPeriod(ch.PeriodProcessor.Next())
 	ch.VolumeFromNote(note)
 
 	/*if ch.firstTickOfNote {
@@ -142,7 +142,7 @@ func (ch *Channel) OnTick(curTick int) {
 
 	//if !ch.firstTickOfNote {
 	ch.PeriodOnTick(curTick)
-	ch.SetPeriod(ch.GetPeriod())
+	//ch.SetPeriod(ch.PeriodProcessor.Next())
 	ch.VolumeOnTick(curTick)
 	//}
 	//ch.firstTickOfNote = false
@@ -192,6 +192,7 @@ func (ch *Channel) GetNextSample() int {
 		ch.note.Ins.Sample[pos+1], ch.note.Ins.Sample[pos+2],
 		float32(subpos64),
 	)
+	ch.SetPeriod(ch.PeriodProcessor.Next())
 	ch.pos += ch.step
 	if ch.pos >= float32(len(ch.note.Ins.Sample)-2) {
 		if ch.note.Ins.RepLen > 2 {
@@ -202,7 +203,7 @@ func (ch *Channel) GetNextSample() int {
 	}
 
 	//fmt.Println(ch.pos, ch.step, val, ch.volume)
-	return val * ch.volume
+	return val * ch.VolumeProcessor.Next()
 }
 
 // GetNextSamples advances the internal counter and returns the values for the next samples to be
@@ -225,7 +226,7 @@ func (p *Player) GetNextSamples() (int, int) {
 
 			switch note.EffType {
 			// we only take care of global position/timing commands here, the rest are handled by the channel or its PPU/VPU
-			case PositionJump, PatternBreak:
+			case /*PositionJump,*/ PatternBreak:
 				songPos, newLine := note.Par(), 0
 				if note.EffType == PatternBreak {
 					songPos, newLine = p.curPattern+1, note.ParX()*10+note.ParY() // BCD
