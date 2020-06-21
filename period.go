@@ -45,7 +45,10 @@ func (ppu *PeriodProcessor) PeriodFromNote(note Note, speed Speed) {
 		resetSlide = false
 	case Portamento:
 		if note.Par() != 0 {
-			ppu.targetPeriod = note.Period
+			if note.Period != 0 {
+				ppu.targetPeriod = note.Period
+				fmt.Println("slide -> ", ppu.targetPeriod)
+			}
 			if note.Period > ppu.period {
 				ppu.periodΔ = note.Par()
 			} else {
@@ -85,6 +88,7 @@ func (ppu *PeriodProcessor) PeriodOnTick(curTick int) {
 	if ppu.periodΔ != 0 {
 		// FIXME: check period limits!
 		if ppu.targetPeriod != 0 && intAbs(ppu.targetPeriod-ppu.period) < intAbs(ppu.periodΔ) {
+			fmt.Println("end slide")
 			ppu.period = ppu.targetPeriod
 			ppu.periodΔ = 0
 		}

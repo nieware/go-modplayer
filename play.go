@@ -71,10 +71,11 @@ type Channel struct {
 }
 
 // NewPlayer creates a Player object for the module mod
-func NewPlayer(mod Module) *Player {
+func NewPlayer(mod Module, start int) *Player {
 	p := &Player{
-		Module: mod,
-		chans:  make([]Channel, 4), // we currently only support 4-channel modules
+		Module:   mod,
+		chans:    make([]Channel, 4), // we currently only support 4-channel modules
+		Position: Position{curPattern: start},
 	}
 	p.Speed = Speed{
 		Tempo: 6,
@@ -220,7 +221,7 @@ func (p *Player) GetNextSamples() (int, int) {
 		for i := range p.chans {
 			note := p.Module.Patterns[patt][p.curLine][i]
 			if note.EffCode != 0 {
-				fmt.Printf("Ch %d: Eff %v\n", i, note.EffType)
+				fmt.Printf("Ch %d: Eff %v Pars: X %d Y %d\n", i, note.EffType, note.ParX(), note.ParY())
 			}
 			p.chans[i].OnNote(note, p.Speed)
 
@@ -338,10 +339,10 @@ func (p *Player) Read(buf []byte) (int, error) {
 }
 
 // Play plays a module
-func Play(mod Module) error {
+func Play(mod Module, start int) error {
 	p := ctx.NewPlayer()
 
-	mp := NewPlayer(mod)
+	mp := NewPlayer(mod, start)
 	if _, err := io.Copy(p, mp); err != nil {
 		return err
 	}
