@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/hajimehoshi/oto"
 )
@@ -60,8 +61,10 @@ type Player struct {
 // Channel is an individual channel of a Player
 type Channel struct {
 	index     int     // the number of this channel
+	muted     bool    // channel currently muted?
 	active    bool    // is the channel currently playing something? Set to false if the sample has "played out"
 	note      *Note   // currently playing note
+	pan       float32 // panning value (0.0 - fully left; 1.0 - fully right)
 	pos, step float32 // the position inside the sample and the step with which to advance the position
 	//firstTickOfNote bool    // is this the first tick where we play this note?
 	tickCnt int // tick counter for note retrig/cut/delay
@@ -71,7 +74,7 @@ type Channel struct {
 }
 
 // NewPlayer creates a Player object for the module mod
-func NewPlayer(mod Module, start int) *Player {
+func NewPlayer(mod Module, start int, chanMask string) *Player {
 	p := &Player{
 		Module:   mod,
 		chans:    make([]Channel, 4), // we currently only support 4-channel modules
@@ -83,8 +86,15 @@ func NewPlayer(mod Module, start int) *Player {
 		SPT:   int(float64(sampleRate) / (.4 * 125)),
 	}
 
+	chanMask = "," + chanMask + ","
 	for i := range p.chans {
 		p.chans[i].index = i
+		p.chans[i].muted = chanMask != ",," && !strings.Contains(chanMask, fmt.Sprintf(",%d,", i+1))
+		fmt.Println(i, p.chans[i].muted)
+		p.chans[i].pan = 0.0
+		if i == 1 || i == 2 {
+			p.chans[i].pan = 1.0
+		}
 		p.chans[i].PeriodProcessor.EffectWaveform = NewEffectWaveform(p.SPT)
 		p.chans[i].VolumeProcessor.EffectWaveform = NewEffectWaveform(p.SPT)
 	}
@@ -173,18 +183,18 @@ func (ch *Channel) OnTick(curTick int) {
 
 // GetNextSample advances the internal counter and returns the value for the next sample to be
 // played on this channel.
-func (ch *Channel) GetNextSample() int {
+func (ch *Channel) GetNextSample() (l, r int) {
 	/*if ch.index == 0 {
 		tremolo := ch.VolumeProcessor.DoStep()
 		fmt.Printf("%d ", tremolo)
 	}//*/
 
-	if !ch.active {
-		return 0
+	if !ch.active || ch.muted {
+		return 0, 0
 	}
 	if ch.note == nil || ch.note.Ins == nil || ch.note.Ins.Sample == nil {
 		fmt.Println("ch.note/ch.note.Ins/ch.note.Ins.Sample nil!")
-		return 0
+		return 0, 0
 	}
 	pos64, subpos64 := math.Modf(float64(ch.pos))
 	pos := int(pos64)
@@ -204,7 +214,8 @@ func (ch *Channel) GetNextSample() int {
 	}
 
 	//fmt.Println(ch.pos, ch.step, val, ch.volume)
-	return val * ch.VolumeProcessor.Next()
+	val = val * ch.VolumeProcessor.Next()
+	return int(float32(val) * ch.pan), int(float32(val) * (1.0 - ch.pan))
 }
 
 // GetNextSamples advances the internal counter and returns the values for the next samples to be
@@ -299,9 +310,10 @@ func (p *Player) GetNextSamples() (int, int) {
 
 	// mix the current value from all channels
 	var mix [2]int
-	var chanTab = [4]int{0, 1, 1, 0}
 	for i := range p.chans {
-		mix[chanTab[i]] += p.chans[i].GetNextSample()
+		l, r := p.chans[i].GetNextSample()
+		mix[0] += l
+		mix[1] += r
 	}
 	return mix[0], mix[1]
 }
@@ -339,10 +351,10 @@ func (p *Player) Read(buf []byte) (int, error) {
 }
 
 // Play plays a module
-func Play(mod Module, start int) error {
+func Play(mod Module, start int, chans string) error {
 	p := ctx.NewPlayer()
 
-	mp := NewPlayer(mod, start)
+	mp := NewPlayer(mod, start, chans)
 	if _, err := io.Copy(p, mp); err != nil {
 		return err
 	}

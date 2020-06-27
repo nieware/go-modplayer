@@ -26,6 +26,7 @@ func main() {
 	playSamples := flag.Bool("samples", false, "play only the samples rather than the complete song")
 	noteToDecode := flag.String("note", "", "specify a note to decode")
 	start := flag.Int("s", 0, "start from the specified order (pattern list index)")
+	chans := flag.String("S", "", "play only specified channels")
 	flag.Usage = Usage
 	flag.Parse()
 
@@ -57,7 +58,7 @@ func main() {
 			}
 		} //*/
 	} else {
-		Play(mod, *start)
+		Play(mod, *start, *chans)
 	}
 
 }
