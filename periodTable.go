@@ -59,7 +59,7 @@ func (pt *PeriodTable) FindPeriod(period int) (NotePeriod, int, error) {
 			return np, ni, nil
 		}
 	}
-	return NotePeriod{}, 0, fmt.Errorf("Note period %d not found", period)
+	return NotePeriod{}, 0, fmt.Errorf("Note period %d not found.", period)
 }
 
 // IncDecPeriod increments/decrements a given period by the given delta value (expressed in half-notes)

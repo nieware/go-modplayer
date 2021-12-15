@@ -11,19 +11,19 @@ import (
 type EffectType int
 
 const (
-	// Arpeggio 0xy: x-first halfnote add, y-second - period cycles between p, p+x, p+y each tick
+	// Arpeggio 0xy: x-first half note add, y-second - period cycles between p, p+x, p+y each tick
 	Arpeggio EffectType = iota
-	// SlideUp 1xx: upspeed - period is decreased by xx each tick
+	// SlideUp 1xx: upSpeed - period is decreased by xx each tick
 	SlideUp
-	// SlideDown 2xx: downspeed - period is increased by xx each tick
+	// SlideDown 2xx: downSpeed - period is increased by xx each tick
 	SlideDown
 	// Portamento 3xx: up/down speed
 	Portamento
 	// Vibrato 4xy: x-speed, y-depth
 	Vibrato
-	// PortamentoVolSlide 5xy: x-upspeed, y-downspeed
+	// PortamentoVolSlide 5xy: x-upSpeed, y-downSpeed
 	PortamentoVolSlide
-	// VibratoVolSlide 6xy: x-upspeed, y-downspeed
+	// VibratoVolSlide 6xy: x-upSpeed, y-downSpeed
 	VibratoVolSlide
 	// Tremolo 7xy: x-speed,   y-depth
 	Tremolo
@@ -31,13 +31,13 @@ const (
 	NotUsed8
 	// SetSampleOffset 9xx: offset (23 -> 2300)
 	SetSampleOffset
-	// VolSlide Axy: x-upspeed, y-downspeed
+	// VolSlide Axy: x-upSpeed, y-downSpeed
 	VolSlide
-	// PositionJump Bxx: songposition
+	// PositionJump Bxx: song position
 	PositionJump
 	// SetVol  Cxx: volume, 00-40
 	SetVol
-	// PatternBreak Dxx: break position in next patt
+	// PatternBreak Dxx: break position in next pattern
 	PatternBreak
 	// Extended Exy: see below...
 	Extended
@@ -50,7 +50,7 @@ const (
 	FineSlideUp
 	// FineSlideDown E2x: value
 	FineSlideDown
-	// GlissandoControl E3x: 0-off, 1-on (use with tonep.)
+	// GlissandoControl E3x: 0-off, 1-on (use with tone portamento)
 	GlissandoControl
 	// SetVibratoWaveform E4x: 0-sine, 1-ramp down, 2-square
 	SetVibratoWaveform
@@ -62,15 +62,15 @@ const (
 	SetTremoloWaveform
 	// NotUsedE8 unused extended command
 	NotUsedE8
-	// RetrigNote E9x: retrig from note + x vblanks
+	// RetrigNote E9x: retrig from note + x vBlanks
 	RetrigNote
 	// FineVolSlideUp EAx: add x to volume
 	FineVolSlideUp
 	// FineVolSlideDown EBx: subtract x from volume
 	FineVolSlideDown
-	// NoteCut ECx: cut from note + x vblanks
+	// NoteCut ECx: cut from note + x vBlanks
 	NoteCut
-	// NoteDelay EDx: delay note x vblanks
+	// NoteDelay EDx: delay note x vBlanks
 	NoteDelay
 	// PatternDelay EEx: delay pattern x notes
 	PatternDelay
@@ -151,7 +151,7 @@ func (i *Instrument) GetPeriodDelta(period, halfNotes int) int {
 	return intAbs(np.period - period)
 }
 
-// Finetune gets the current finetune value for this instrumen
+// Finetune gets the current finetune value for this instrument
 func (i *Instrument) Finetune() int {
 	return i.finetune
 }

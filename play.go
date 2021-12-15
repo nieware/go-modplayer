@@ -14,7 +14,7 @@ import (
 // y = ((1/p)*16574.27) / (1/214) = (16574.27/p) * 214 = 16574.27 * 214 / p
 
 // p = 428 --> y = 3546894.6 / 428 = 8287.13
-// step = samplerate/y = (samplerate * p) / 3546894.6
+// step = sampleRate/y = (sampleRate * p) / 3546894.6
 
 var ctx *oto.Context
 
@@ -148,7 +148,7 @@ func (ch *Channel) OnNote(note Note, speed Speed) {
 // OnTick computes the necessary parameters for the given tick
 func (ch *Channel) OnTick(curTick int) {
 	/*if ch.index == 0 {
-		fmt.Printf("\n\ntick %d\n", curTick)
+		fmt.Printf("\n\nTick %d\n", curTick)
 	}//*/
 
 	//if !ch.firstTickOfNote {
@@ -196,12 +196,12 @@ func (ch *Channel) GetNextSample() (l, r int) {
 		fmt.Println("ch.note/ch.note.Ins/ch.note.Ins.Sample nil!")
 		return 0, 0
 	}
-	pos64, subpos64 := math.Modf(float64(ch.pos))
+	pos64, subPos64 := math.Modf(float64(ch.pos))
 	pos := int(pos64)
 	val := Interpolate(
 		ch.note.Ins.Sample[pos-1], ch.note.Ins.Sample[pos],
 		ch.note.Ins.Sample[pos+1], ch.note.Ins.Sample[pos+2],
-		float32(subpos64),
+		float32(subPos64),
 	)
 	ch.SetPeriod(ch.PeriodProcessor.Next())
 	ch.pos += ch.step

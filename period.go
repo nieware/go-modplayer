@@ -10,7 +10,7 @@ type PeriodProcessor struct {
 	arpeggio     []int // periods for arpeggio
 	arpeggioIdx  int   // index in arpeggio array
 	targetPeriod int   // target period for "slide to note"
-	glissando    bool  // glissando flag (true - "slide to note" slides in halfnotes)
+	glissando    bool  // glissando flag (true - "slide to note" slides in half notes)
 
 	Ins *Instrument
 

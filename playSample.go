@@ -13,7 +13,7 @@ type SamplePlayer struct {
 	ended     bool
 }
 
-// NewSamplePlayer creates a SamplaPlayer object for the instrument ins
+// NewSamplePlayer creates a SamplePlayer object for the instrument ins
 func NewSamplePlayer(ins Instrument, periods []int) *SamplePlayer {
 	return &SamplePlayer{
 		Instrument: ins,
